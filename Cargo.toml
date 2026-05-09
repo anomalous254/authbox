@@ -1,21 +1,15 @@
 [package]
 name = "authbox"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
-
 description = "Modern Rust authentication for Actix-Web"
 license = "MIT"
-
 repository = "https://github.com/anomalous254/authbox"
 homepage = "https://github.com/anomalous254/authbox"
 documentation = "https://docs.rs/authbox"
-
 readme = "README.md"
-
 keywords = ["authentication", "jwt", "actix", "security", "auth"]
-
 categories = ["authentication", "web-programming"]
-
 authors = ["anomalous254"]
 
 
