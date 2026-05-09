@@ -2,7 +2,7 @@
 
 Modern Rust authentication for Actix-Web.
 
-AuthBox provides a batteries-included authentication system for Rust web applications with secure defaults, clean developer experience, and production-ready authentication flows.
+AuthBox provides a batteries-included authentication system for Rust actix-web applications with secure defaults, clean developer experience, and production-ready authentication flows.
 
 ## Features
 
