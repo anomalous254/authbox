@@ -17,11 +17,15 @@ authors = ["anomalous254"]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
-argon2 = "0.5.3"
+argon2 = {version = "0.5.3",  features=["password-hash"]}
 actix-web = "4.13.0"
 actix-files = "0.6.10"
-jsonwebtoken = "10.3.0"
+jsonwebtoken = { version = "10.3.0", features = ["aws_lc_rs"] }
 actix-web-httpauth = "0.8.2"
+async-trait = "0.1.89"
+chrono = "0.4.44"
+rand = {version="0.10.1", features = ["std"] }
+rand_core = { version="0.6", features=["getrandom"]}
 
 
 [lib]

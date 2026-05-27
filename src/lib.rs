@@ -1,7 +1,8 @@
 //! AuthBox
 //!
-//! Modern authentication for Actix-Web.
+//! Modern authentication for rust web apps.
 
-pub fn hello() {
-    println!("authbox");
-}
+pub mod middlewares;
+pub mod prelude;
+pub mod services;
+pub mod traits;

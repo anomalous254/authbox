@@ -1,41 +1,22 @@
-# AuthBox
-
-Modern Rust authentication for Actix-Web.
-
-AuthBox provides a batteries-included authentication system for Rust actix-web applications with secure defaults, clean developer experience, and production-ready authentication flows.
-
-## Features
-
-### Current Features
-
-- [ ] JWT authentication
-- [ ] User registration
-- [ ] Login authentication
-- [ ] Argon2 password hashing
-- [ ] Typed auth errors
-- [ ] Config-driven setup
-- [ ] Async-first architecture
-- [ ] Extensible service layer
-- [ ] Framework-friendly design
+# authbox
 
 
-### Planned Features
+A lightweight, modular authentication framework for Rust built around traits, async support, and pluggable components.
 
-- [ ] Email verification
-- [ ] Password reset flows
-- [ ] Refresh token rotation
-- [ ] Session authentication
-- [ ] OAuth providers (Google, GitHub, Discord)
-- [ ] Middleware extractors
-- [ ] Role-based permissions (RBAC)
-- [ ] SQLx integration
-- [ ] SeaORM integration
-- [ ] OpenAPI support
-- [ ] Rate limiting
-- [ ] Multi-factor authentication (MFA)
-- [ ] Admin dashboard integration
-- [ ] Account activation flows
-- [ ] Token blacklisting
-- [ ] Redis session storage
-- [ ] Audit logging
-- [ ] Multi-tenant support
+### It provides
+
+- Password hashing (Argon2)
+- JWT authentication (access + refresh tokens)
+- Async-ready API (Tokio)
+- Pluggable architecture (store, hasher, token manager)
+- Fully testable design
+
+### Features
+
+- User registration & login flow
+- Secure password hashing using Argon2
+- JWT access + refresh token support
+- Token refresh rotation
+- Custom user store support (DB or in-memory)
+- Fully async (tokio + async-trait)
+- Trait-based architecture for flexibility
