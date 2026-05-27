@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "authbox"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "actix-files",
  "actix-web",
@@ -302,7 +302,6 @@ dependencies = [
  "async-trait",
  "chrono",
  "jsonwebtoken",
- "rand",
  "rand_core 0.6.4",
  "serde",
  "serde_json",

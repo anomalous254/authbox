@@ -1,9 +1,9 @@
 [package]
 name = "authbox"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
-description = "Modern Rust authentication for Actix-Web"
-license = "MIT"
+description = "A lightweight, modular authentication framework for Rust built around traits, async support, and pluggable component"
+license = "Apache-2.0"
 repository = "https://github.com/anomalous254/authbox"
 homepage = "https://github.com/anomalous254/authbox"
 documentation = "https://docs.rs/authbox"
@@ -24,7 +24,6 @@ jsonwebtoken = { version = "10.3.0", features = ["aws_lc_rs"] }
 actix-web-httpauth = "0.8.2"
 async-trait = "0.1.89"
 chrono = "0.4.44"
-rand = {version="0.10.1", features = ["std"] }
 rand_core = { version="0.6", features=["getrandom"]}
 
 
