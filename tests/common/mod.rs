@@ -65,8 +65,9 @@ impl TestStore {
 }
 
 #[async_trait]
-impl UserStore<TestUser> for TestStore {
+impl UserStore for TestStore {
     type Error = String;
+    type User = TestUser;
 
     async fn find_by_id(&self, user_id: &str) -> Option<TestUser> {
         let users = self.users.lock().unwrap();
@@ -245,8 +246,7 @@ impl EmailTemplateConfig<TestUser> for MockTemplates {
 // TEST AUTH BUILDER
 // =========================
 
-pub fn build_test_auth() -> AuthService<
-    TestUser,
+type TestAuthService = AuthService<
     TestStore,
     DefaultHasher,
     DefaultJwtManager,
@@ -254,23 +254,16 @@ pub fn build_test_auth() -> AuthService<
     MockEmailSender,
     MockTemplates,
     MemoryOttStore,
-> {
-    AuthService::<
-        TestUser,
-        TestStore,
-        DefaultHasher,
-        DefaultJwtManager,
-        MemoryBlacklistStore,
-        MockEmailSender,
-        MockTemplates,
-        MemoryOttStore,
-    >::builder()
-    .store(TestStore::new())
-    .hasher(DefaultHasher)
-    .tokens(DefaultJwtManager::new("secret"))
-    .blacklist(MemoryBlacklistStore::new())
-    .email_sender(MockEmailSender)
-    .email_templates(MockTemplates)
-    .ott_store(MemoryOttStore::new())
-    .build()
+>;
+
+pub fn build_test_auth() -> TestAuthService {
+    AuthService::builder()
+        .store(TestStore::new())
+        .hasher(DefaultHasher)
+        .tokens(DefaultJwtManager::new("secret"))
+        .blacklist(MemoryBlacklistStore::new())
+        .email_sender(MockEmailSender)
+        .email_templates(MockTemplates)
+        .ott_store(MemoryOttStore::new())
+        .build()
 }

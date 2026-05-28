@@ -1,5 +1,4 @@
 use crate::services::AuthService;
-use std::marker::PhantomData;
 
 pub struct AuthServiceBuilder<S, P, T, B, E, M, V> {
     store: Option<S>,
@@ -60,7 +59,7 @@ impl<S, P, T, B, E, M, V> AuthServiceBuilder<S, P, T, B, E, M, V> {
         self
     }
 
-    pub fn build<U>(self) -> AuthService<U, S, P, T, B, E, M, V> {
+    pub fn build(self) -> AuthService<S, P, T, B, E, M, V> {
         AuthService {
             store: self.store.expect("store missing"),
             hasher: self.hasher.expect("hasher missing"),
@@ -69,8 +68,6 @@ impl<S, P, T, B, E, M, V> AuthServiceBuilder<S, P, T, B, E, M, V> {
             email_sender: self.email_sender.expect("email_sender missing"),
             email_templates: self.email_templates.expect("email_templates missing"),
             ott_store: self.ott_store.expect("token_store missing"),
-
-            _marker: PhantomData,
         }
     }
 }
