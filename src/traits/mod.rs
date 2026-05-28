@@ -1,12 +1,16 @@
 pub mod auth_user;
 pub mod blacklist_token;
+pub mod email;
+pub mod jwt_manager;
+pub mod one_time_token_store;
 pub mod password_hasher;
-pub mod token_manager;
 pub mod user_store;
 
 /// re-exports
 pub use auth_user::AuthUser;
 pub use blacklist_token::BlacklistableClaims;
+pub use email::{EmailProvider, EmailTemplateConfig};
+pub use jwt_manager::{TokenBlacklistStore, TokenManager};
+pub use one_time_token_store::OneTimeTokenStore;
 pub use password_hasher::PasswordHasher;
-pub use token_manager::{TokenBlacklistStore, TokenManager};
 pub use user_store::UserStore;
