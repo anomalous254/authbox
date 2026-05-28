@@ -392,7 +392,10 @@ Redis is recommended for refresh token blacklisting because it supports automati
 
 # Roadmap
 
-- [ ] Database adapters (SQLx, Diesel, MongoDB)
+## Roadmap
+
+- [x] Database adapters (SQLx, Diesel, MongoDB, and any backend storage supported via trait-based architecture)
+- [x] Token blacklist / revocation system (pluggable via `TokenBlacklistStore`)
 - [ ] RBAC (Role-based access control)
 - [ ] OAuth2 integration
 - [ ] Middleware for Axum / Actix
