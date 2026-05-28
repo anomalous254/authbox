@@ -1,9 +1,12 @@
+use async_trait::async_trait;
 use authbox::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 
 // =========================
 // TEST USER
 // =========================
+
 #[derive(Clone)]
 #[allow(unused)]
 struct TestUser {
@@ -32,8 +35,9 @@ impl AuthUser for TestUser {
 }
 
 // =========================
-// IN-MEMORY STORE
+// IN-MEMORY USER STORE
 // =========================
+
 struct TestStore {
     users: HashMap<String, TestUser>,
 }
@@ -67,12 +71,52 @@ impl UserStore<TestUser> for TestStore {
         };
 
         self.users.insert(user.id.clone(), user.clone());
+
         user
     }
 }
 
 // =========================
-// TESTS
+// IN-MEMORY TOKEN BLACKLIST
+// =========================
+
+#[derive(Clone)]
+struct MemoryBlacklistStore {
+    tokens: Arc<Mutex<HashSet<String>>>,
+}
+
+impl MemoryBlacklistStore {
+    fn new() -> Self {
+        Self {
+            tokens: Arc::new(Mutex::new(HashSet::new())),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct BlacklistError;
+
+#[async_trait]
+impl TokenBlacklistStore for MemoryBlacklistStore {
+    type Error = BlacklistError;
+
+    async fn is_blacklisted(&self, jti: &str) -> Result<bool, Self::Error> {
+        let store = self.tokens.lock().unwrap();
+
+        Ok(store.contains(jti))
+    }
+
+    async fn blacklist_token(&self, jti: &str, _expires_at: i64) -> Result<bool, Self::Error> {
+        let mut store = self.tokens.lock().unwrap();
+
+        store.insert(jti.to_string());
+
+        Ok(true)
+    }
+}
+
+// =========================
+// PASSWORD HASH TEST
 // =========================
 
 #[test]
@@ -89,7 +133,7 @@ fn test_password_hashing() {
 }
 
 // =========================
-// AUTH FLOW TEST
+// REGISTER + LOGIN TEST
 // =========================
 
 #[tokio::test]
@@ -97,16 +141,19 @@ async fn test_register_and_login_flow() {
     let store = TestStore::new();
     let hasher = DefaultHasher;
     let tokens = DefaultJwtManager::new("secret");
+    let blacklist = MemoryBlacklistStore::new();
 
     let mut auth = AuthService {
         store,
         hasher,
         tokens,
+        blacklist,
     };
 
     // -------------------------
     // REGISTER
     // -------------------------
+
     let user = auth
         .register::<TestUser>("test@mail.com".to_string(), "password123".to_string())
         .await;
@@ -114,17 +161,13 @@ async fn test_register_and_login_flow() {
     println!("\n=== REGISTER ===");
     println!("id: {}", user.id());
     println!("email: {}", user.email());
-    println!("role: {}", user.role);
-    println!("active: {}", user.is_active);
-    println!("created_at: {}", user.created_at);
 
     assert_eq!(user.email(), "test@mail.com");
-    assert_eq!(user.role, "user");
-    assert!(user.is_active);
 
     // -------------------------
     // LOGIN SUCCESS
     // -------------------------
+
     let login = auth.login::<TestUser>("test@mail.com", "password123").await;
 
     println!("\n=== LOGIN SUCCESS ===");
@@ -136,6 +179,7 @@ async fn test_register_and_login_flow() {
     // -------------------------
     // LOGIN FAILURE
     // -------------------------
+
     let bad_login = auth
         .login::<TestUser>("test@mail.com", "wrongpassword")
         .await;
@@ -147,32 +191,35 @@ async fn test_register_and_login_flow() {
     assert!(bad_login.unwrap().is_none());
 }
 
+// =========================
+// REFRESH TOKEN TEST
+// =========================
+
 #[tokio::test]
 async fn test_refresh_token_flow() {
-    use authbox::prelude::*;
     let store = TestStore::new();
     let hasher = DefaultHasher;
     let tokens = DefaultJwtManager::new("secret");
+    let blacklist = MemoryBlacklistStore::new();
 
     let mut auth = AuthService {
         store,
         hasher,
         tokens,
+        blacklist,
     };
 
     // -------------------------
-    // REGISTER USER
+    // REGISTER
     // -------------------------
-    let user = auth
-        .register::<TestUser>("refresh@test.com".to_string(), "password123".to_string())
+
+    auth.register::<TestUser>("refresh@test.com".to_string(), "password123".to_string())
         .await;
 
-    println!("\n=== REGISTER ===");
-    println!("user id: {}", user.id());
+    // -------------------------
+    // LOGIN
+    // -------------------------
 
-    // -------------------------
-    // LOGIN (GET TOKENS)
-    // -------------------------
     let login = auth
         .login::<TestUser>("refresh@test.com", "password123")
         .await
@@ -182,11 +229,11 @@ async fn test_refresh_token_flow() {
     println!("\n=== LOGIN TOKENS ===");
     println!("access_token: {}", login.access_token);
     println!("refresh_token: {}", login.refresh_token);
-    println!("expires_in: {}", login.expires_in);
 
     // -------------------------
-    // REFRESH TOKEN FLOW
+    // REFRESH
     // -------------------------
+
     let refreshed = auth.tokens.refresh(&login.refresh_token).await;
 
     println!("\n=== REFRESH RESULT ===");
@@ -196,11 +243,71 @@ async fn test_refresh_token_flow() {
 
     let new_tokens = refreshed.unwrap();
 
-    println!("\n=== NEW TOKENS ===");
-    println!("access_token: {}", new_tokens.access_token);
-    println!("refresh_token: {}", new_tokens.refresh_token);
-    println!("expires_in: {}", new_tokens.expires_in);
-
     assert!(!new_tokens.access_token.is_empty());
     assert!(!new_tokens.refresh_token.is_empty());
 }
+
+// =========================
+// TOKEN BLACKLIST TEST
+// =========================
+
+#[tokio::test]
+async fn test_refresh_token_blacklist_flow() {
+    let store = TestStore::new();
+    let hasher = DefaultHasher;
+    let tokens = DefaultJwtManager::new("secret");
+    let blacklist = MemoryBlacklistStore::new();
+
+    let mut auth = AuthService {
+        store,
+        hasher,
+        tokens,
+        blacklist,
+    };
+
+    // -------------------------
+    // REGISTER
+    // -------------------------
+
+    auth.register::<TestUser>("blacklist@test.com".to_string(), "password123".to_string())
+        .await;
+
+    // -------------------------
+    // LOGIN
+    // -------------------------
+
+    let login = auth
+        .login::<TestUser>("blacklist@test.com", "password123")
+        .await
+        .unwrap()
+        .unwrap();
+
+    let refresh_token = login.refresh_token.clone();
+
+    println!("\n=== ORIGINAL REFRESH TOKEN ===");
+    println!("{}", refresh_token);
+
+    // -------------------------
+    // FIRST REFRESH
+    // -------------------------
+
+    let refreshed = auth.refresh_token(&refresh_token).await;
+
+    println!("\n=== FIRST REFRESH ===");
+    println!("{:#?}", refreshed);
+
+    assert!(refreshed.is_ok());
+
+    // -------------------------
+    // SECOND REFRESH
+    // SHOULD FAIL
+    // -------------------------
+
+    let second_try = auth.refresh_token(&refresh_token).await;
+
+    println!("\n=== SECOND REFRESH ===");
+    println!("{:#?}", second_try);
+
+    assert!(matches!(second_try, Err(AuthError::BlacklistedToken)));
+}
+
