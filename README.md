@@ -1,4 +1,3 @@
-````markdown
 # authbox
 
 A lightweight, modular authentication framework for Rust built around traits, async support, and pluggable components.
@@ -387,6 +386,7 @@ Handles refresh token revocation:
 
 ```text
 Redis is recommended for refresh token blacklisting because it supports automatic TTL expiration and very fast lookups.
+```
 
 ---
 
@@ -405,7 +405,6 @@ Redis is recommended for refresh token blacklisting because it supports automati
 # License
 
 Apache-2.0
-````
 
 
 
