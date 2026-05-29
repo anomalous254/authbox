@@ -26,7 +26,7 @@ impl<S, P, T, B, E, M, V> AuthService<S, P, T, B, E, M, V> {
     }
 
     /// Register a new user
-    pub async fn register(&mut self, email: String, password: String) -> Result<S::User, S::Error>
+    pub async fn register(&mut self, input: S::RegisterDto) -> Result<S::User, S::Error>
     where
         S: UserStore,
         P: PasswordHasher,
@@ -36,8 +36,8 @@ impl<S, P, T, B, E, M, V> AuthService<S, P, T, B, E, M, V> {
         M: EmailTemplateConfig<S::User>,
         V: OneTimeTokenStore,
     {
-        let hash = self.hasher.hash(&password);
-        let user = self.store.create_user(email, hash).await?;
+        let hash = self.hasher.hash(input.password());
+        let user = self.store.create_user(input, hash).await?;
 
         let token = Uuid::new_v4().to_string();
 
@@ -171,4 +171,3 @@ impl<S, P, T, B, E, M, V> AuthService<S, P, T, B, E, M, V> {
         }
     }
 }
-

@@ -1,6 +1,6 @@
 [package]
 name = "authbox"
-version = "0.1.5"
+version = "0.2.5"
 edition = "2024"
 description = "A lightweight, modular authentication framework for Rust built around traits, async support, and pluggable component"
 license = "Apache-2.0"

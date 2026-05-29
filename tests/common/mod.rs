@@ -4,7 +4,37 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 // =========================
-// TEST USER
+// REGISTER DTO (MANY FIELDS)
+// =========================
+
+#[derive(Clone, Debug)]
+pub struct RegisterDto {
+    pub email: String,
+    pub password: String,
+
+    pub username: Option<String>,
+    pub phone: Option<String>,
+    pub country: Option<String>,
+    pub city: Option<String>,
+    pub age: Option<u32>,
+}
+
+// =========================
+// TRAIT (ONLY AUTH CORE FIELDS)
+// =========================
+
+impl RegisterUserInput for RegisterDto {
+    fn email(&self) -> &str {
+        &self.email
+    }
+
+    fn password(&self) -> &str {
+        &self.password
+    }
+}
+
+// =========================
+// USER MODEL
 // =========================
 
 #[derive(Clone, Debug)]
@@ -13,13 +43,19 @@ pub struct TestUser {
     pub id: String,
     pub email: String,
     pub password_hash: String,
+
     pub is_email_verified: bool,
 
-    pub username: String,
-    pub is_active: bool,
-    pub role: String,
-    pub created_at: u64,
+    pub username: Option<String>,
+    pub phone: Option<String>,
+    pub country: Option<String>,
+    pub city: Option<String>,
+    pub age: Option<u32>,
 }
+
+// =========================
+// AUTHUSER
+// =========================
 
 impl AuthUser for TestUser {
     fn id(&self) -> String {
@@ -48,7 +84,7 @@ impl AuthUser for TestUser {
 }
 
 // =========================
-// TEST STORE
+// STORE
 // =========================
 
 #[derive(Clone)]
@@ -68,31 +104,36 @@ impl TestStore {
 impl UserStore for TestStore {
     type Error = String;
     type User = TestUser;
+    type RegisterDto = RegisterDto;
 
     async fn find_by_id(&self, user_id: &str) -> Option<TestUser> {
         let users = self.users.lock().unwrap();
-
         users.get(user_id).cloned()
     }
 
     async fn find_by_email(&self, email: &str) -> Option<TestUser> {
         let users = self.users.lock().unwrap();
-
         users.values().find(|u| u.email == email).cloned()
     }
 
-    async fn create_user(&self, email: String, pass_hash: String) -> Result<TestUser, Self::Error> {
+    async fn create_user(
+        &self,
+        input: RegisterDto,
+        pass_hash: String,
+    ) -> Result<TestUser, Self::Error> {
         let mut users = self.users.lock().unwrap();
 
         let user = TestUser {
-            id: email.clone(),
-            email,
+            id: input.email.clone(),
+            email: input.email,
             password_hash: pass_hash,
             is_email_verified: false,
-            username: "test_user".to_string(),
-            is_active: true,
-            role: "user".to_string(),
-            created_at: 1234567890,
+
+            username: input.username,
+            phone: input.phone,
+            country: input.country,
+            city: input.city,
+            age: input.age,
         };
 
         users.insert(user.id.clone(), user.clone());
@@ -102,17 +143,13 @@ impl UserStore for TestStore {
 
     async fn update_user(&self, user: TestUser) -> Result<TestUser, Self::Error> {
         let mut users = self.users.lock().unwrap();
-
         users.insert(user.id.clone(), user.clone());
-
         Ok(user)
     }
 
     async fn delete_user(&self, user_id: &str) -> Result<(), Self::Error> {
         let mut users = self.users.lock().unwrap();
-
         users.remove(user_id);
-
         Ok(())
     }
 }
@@ -143,15 +180,12 @@ impl TokenBlacklistStore for MemoryBlacklistStore {
 
     async fn is_blacklisted(&self, jti: &str) -> Result<bool, Self::Error> {
         let store = self.tokens.lock().unwrap();
-
         Ok(store.contains(jti))
     }
 
     async fn blacklist_token(&self, jti: &str, _expires_at: i64) -> Result<bool, Self::Error> {
         let mut store = self.tokens.lock().unwrap();
-
         store.insert(jti.to_string());
-
         Ok(true)
     }
 }
@@ -177,19 +211,16 @@ impl MemoryOttStore {
 impl OneTimeTokenStore for MemoryOttStore {
     async fn set(&self, key: &str, value: &str, _: u64) {
         let mut store = self.store.lock().unwrap();
-
         store.insert(key.to_string(), value.to_string());
     }
 
     async fn get(&self, key: &str) -> Option<String> {
         let store = self.store.lock().unwrap();
-
         store.get(key).cloned()
     }
 
     async fn delete(&self, key: &str) {
         let mut store = self.store.lock().unwrap();
-
         store.remove(key);
     }
 }
@@ -206,12 +237,7 @@ impl EmailProvider for MockEmailSender {
     type Error = ();
 
     async fn send_email(&self, to: &str, subject: &str, body: &str) -> Result<(), Self::Error> {
-        println!();
-        println!("=== EMAIL SENT ===");
-        println!("TO: {}", to);
-        println!("SUBJECT: {}", subject);
-        println!("BODY: {}", body);
-
+        println!("\nEMAIL TO: {}\nSUBJECT: {}\nBODY: {}", to, subject, body);
         Ok(())
     }
 }
@@ -243,7 +269,7 @@ impl EmailTemplateConfig<TestUser> for MockTemplates {
 }
 
 // =========================
-// TEST AUTH BUILDER
+// TEST AUTH SERVICE TYPE
 // =========================
 
 type TestAuthService = AuthService<

@@ -8,11 +8,19 @@ async fn test_email_verification_flow() {
     let mut auth = build_test_auth();
 
     // =========================
-    // REGISTER
+    // REGISTER (FIXED)
     // =========================
 
     let user = auth
-        .register("verify@test.com".to_string(), "password123".to_string())
+        .register(RegisterDto {
+            email: "verify@test.com".to_string(),
+            password: "password123".to_string(),
+            username: None,
+            phone: None,
+            country: None,
+            city: None,
+            age: None,
+        })
         .await
         .unwrap();
 
@@ -24,7 +32,6 @@ async fn test_email_verification_flow() {
 
     let token = {
         let store = auth.ott_store.store.lock().unwrap();
-
         store.keys().next().unwrap().clone()
     };
 
@@ -56,12 +63,20 @@ async fn test_password_reset_flow() {
     let mut auth = build_test_auth();
 
     // =========================
-    // REGISTER
+    // REGISTER (FIXED)
     // =========================
 
-    auth.register("reset@test.com".to_string(), "old-password".to_string())
-        .await
-        .unwrap();
+    auth.register(RegisterDto {
+        email: "reset@test.com".to_string(),
+        password: "old-password".to_string(),
+        username: None,
+        phone: None,
+        country: None,
+        city: None,
+        age: None,
+    })
+    .await
+    .unwrap();
 
     // =========================
     // REQUEST RESET
@@ -75,7 +90,6 @@ async fn test_password_reset_flow() {
 
     let token = {
         let store = auth.ott_store.store.lock().unwrap();
-
         store.keys().next().unwrap().clone()
     };
 

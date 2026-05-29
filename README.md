@@ -23,6 +23,7 @@ It is designed for applications that need customizable authentication logic with
 - Framework agnostic
 - Test-friendly design
 - Builder API for ergonomic setup
+- Custom registration DTO support
 
 ---
 
@@ -44,7 +45,55 @@ use authbox::prelude::*;
 
 ---
 
-# 1. Create Your User Type
+# 1. Create a Custom Registration DTO
+
+`authbox` supports fully customizable registration DTOs.
+
+The DTO name can be anything.
+
+```rust
+#[derive(Clone, Debug)]
+pub struct SignupRequest {
+    // required auth fields
+    pub email: String,
+    pub password: String,
+
+    // custom application fields
+    pub username: Option<String>,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub phone: Option<String>,
+    pub country: Option<String>,
+    pub city: Option<String>,
+    pub age: Option<u32>,
+    pub bio: Option<String>,
+}
+```
+
+---
+
+## Implement `RegisterUserInput`
+
+`authbox` only requires access to:
+
+- email
+- password
+
+```rust
+impl RegisterUserInput for SignupRequest {
+    fn email(&self) -> &str {
+        &self.email
+    }
+
+    fn password(&self) -> &str {
+        &self.password
+    }
+}
+```
+
+---
+
+# 2. Create Your User Type
 
 Your user model must implement the `AuthUser` trait.
 
@@ -55,6 +104,16 @@ pub struct User {
     pub email: String,
     pub password_hash: String,
     pub is_email_verified: bool,
+
+    // custom fields
+    pub username: Option<String>,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub phone: Option<String>,
+    pub country: Option<String>,
+    pub city: Option<String>,
+    pub age: Option<u32>,
+    pub bio: Option<String>,
 }
 
 impl AuthUser for User {
@@ -86,7 +145,7 @@ impl AuthUser for User {
 
 ---
 
-# 2. Create a User Store
+# 3. Create a User Store
 
 `authbox` works with any backend:
 
@@ -97,8 +156,6 @@ impl AuthUser for User {
 - Redis
 - In-memory stores
 - Custom storage systems
-
-Implement the `UserStore` trait:
 
 ```rust
 use async_trait::async_trait;
@@ -123,6 +180,9 @@ impl UserStore for UserStoreImpl {
     type Error = String;
     type User = User;
 
+    // custom registration dto
+    type RegisterDto = SignupRequest;
+
     async fn find_by_id(&self, user_id: &str) -> Option<User> {
         let users = self.users.lock().unwrap();
 
@@ -137,16 +197,25 @@ impl UserStore for UserStoreImpl {
 
     async fn create_user(
         &self,
-        email: String,
+        input: SignupRequest,
         pass_hash: String,
     ) -> Result<User, Self::Error> {
         let mut users = self.users.lock().unwrap();
 
         let user = User {
-            id: email.clone(),
-            email,
+            id: input.email.clone(),
+            email: input.email,
             password_hash: pass_hash,
             is_email_verified: false,
+
+            username: input.username,
+            first_name: input.first_name,
+            last_name: input.last_name,
+            phone: input.phone,
+            country: input.country,
+            city: input.city,
+            age: input.age,
+            bio: input.bio,
         };
 
         users.insert(user.id.clone(), user.clone());
@@ -180,7 +249,7 @@ impl UserStore for UserStoreImpl {
 
 ---
 
-# 3. Create a Password Hasher
+# 4. Create a Password Hasher
 
 Use the built-in Argon2 hasher:
 
@@ -192,7 +261,7 @@ Or implement your own `PasswordHasher`.
 
 ---
 
-# 4. Create a JWT Manager
+# 5. Create a JWT Manager
 
 Use the built-in JWT implementation:
 
@@ -204,187 +273,13 @@ Or implement your own `TokenManager`.
 
 ---
 
-# 5. Create a Token Blacklist Store
-
-Used for refresh token revocation.
-
-```rust
-use async_trait::async_trait;
-use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
-
-#[derive(Clone)]
-pub struct MemoryBlacklistStore {
-    pub tokens: Arc<Mutex<HashSet<String>>>,
-}
-
-impl MemoryBlacklistStore {
-    pub fn new() -> Self {
-        Self {
-            tokens: Arc::new(Mutex::new(HashSet::new())),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct BlacklistError;
-
-#[async_trait]
-impl TokenBlacklistStore for MemoryBlacklistStore {
-    type Error = BlacklistError;
-
-    async fn is_blacklisted(
-        &self,
-        jti: &str,
-    ) -> Result<bool, Self::Error> {
-        let store = self.tokens.lock().unwrap();
-
-        Ok(store.contains(jti))
-    }
-
-    async fn blacklist_token(
-        &self,
-        jti: &str,
-        _expires_at: i64,
-    ) -> Result<bool, Self::Error> {
-        let mut store = self.tokens.lock().unwrap();
-
-        store.insert(jti.to_string());
-
-        Ok(true)
-    }
-}
-```
-
----
-
-# 6. Create an OTT Store
-
-One-time token storage used for:
-
-- Email verification
-- Password reset flows
-
-```rust
-#[derive(Clone)]
-pub struct MemoryOttStore {
-    pub store: Arc<Mutex<HashMap<String, String>>>,
-}
-
-impl MemoryOttStore {
-    pub fn new() -> Self {
-        Self {
-            store: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-}
-
-#[async_trait]
-impl OneTimeTokenStore for MemoryOttStore {
-    async fn set(
-        &self,
-        key: &str,
-        value: &str,
-        _: u64,
-    ) {
-        let mut store = self.store.lock().unwrap();
-
-        store.insert(key.to_string(), value.to_string());
-    }
-
-    async fn get(
-        &self,
-        key: &str,
-    ) -> Option<String> {
-        let store = self.store.lock().unwrap();
-
-        store.get(key).cloned()
-    }
-
-    async fn delete(&self, key: &str) {
-        let mut store = self.store.lock().unwrap();
-
-        store.remove(key);
-    }
-}
-```
-
----
-
-# 7. Create an Email Provider
-
-```rust
-#[derive(Clone)]
-pub struct MockEmailSender;
-
-#[async_trait]
-impl EmailProvider for MockEmailSender {
-    type Error = ();
-
-    async fn send_email(
-        &self,
-        to: &str,
-        subject: &str,
-        body: &str,
-    ) -> Result<(), Self::Error> {
-        println!("TO: {}", to);
-        println!("SUBJECT: {}", subject);
-        println!("BODY: {}", body);
-
-        Ok(())
-    }
-}
-```
-
----
-
-# 8. Create Email Templates
-
-```rust
-#[derive(Clone)]
-pub struct MockTemplates;
-
-#[async_trait]
-impl EmailTemplateConfig<User> for MockTemplates {
-    fn verify_email_subject(&self, _: &User) -> String {
-        "Verify Email".to_string()
-    }
-
-    fn verify_email_body(
-        &self,
-        _: &User,
-        token: &str,
-    ) -> String {
-        format!("verify token: {}", token)
-    }
-
-    fn reset_password_subject(&self, _: &User) -> String {
-        "Reset Password".to_string()
-    }
-
-    fn reset_password_body(
-        &self,
-        _: &User,
-        token: &str,
-    ) -> String {
-        format!("reset token: {}", token)
-    }
-}
-```
-
----
-
-# 9. Build the Auth Service
+# 6. Build the Auth Service
 
 ```rust
 let auth = AuthService::builder()
     .store(UserStoreImpl::new())
     .hasher(DefaultHasher)
     .tokens(DefaultJwtManager::new("secret"))
-    .blacklist(MemoryBlacklistStore::new())
-    .email_sender(MockEmailSender)
-    .email_templates(MockTemplates)
-    .ott_store(MemoryOttStore::new())
     .build();
 ```
 
@@ -394,10 +289,21 @@ let auth = AuthService::builder()
 
 ```rust
 let user = auth
-    .register(
-        "user@mail.com".to_string(),
-        "password123".to_string(),
-    )
+    .register(SignupRequest {
+        email: "sarah.connor@example.com".to_string(),
+        password: "UltraSecurePassword123!".to_string(),
+
+        username: Some("sarahconnor".to_string()),
+        first_name: Some("Sarah".to_string()),
+        last_name: Some("Connor".to_string()),
+        phone: Some("+1-555-0199".to_string()),
+        country: Some("United States".to_string()),
+        city: Some("Los Angeles".to_string()),
+        age: Some(32),
+        bio: Some(
+            "Rust developer and cybersecurity enthusiast".to_string()
+        ),
+    })
     .await?;
 
 println!("User created: {}", user.email());
@@ -410,8 +316,8 @@ println!("User created: {}", user.email());
 ```rust
 let login = auth
     .login(
-        "user@mail.com",
-        "password123",
+        "sarah.connor@example.com",
+        "UltraSecurePassword123!",
     )
     .await?;
 
@@ -457,8 +363,10 @@ auth.verify_email(&token).await;
 ## Request Password Reset
 
 ```rust
-auth.request_password_reset("user@mail.com")
-    .await;
+auth.request_password_reset(
+    "sarah.connor@example.com",
+)
+.await;
 ```
 
 ## Reset Password
@@ -467,7 +375,8 @@ auth.request_password_reset("user@mail.com")
 auth.reset_password(
     &token,
     "new-password",
-).await;
+)
+.await;
 ```
 
 ---
@@ -489,8 +398,6 @@ pub struct AuthTokens {
 
 `authbox` is built around composable traits.
 
----
-
 ## AuthService
 
 Handles authentication business logic:
@@ -501,8 +408,6 @@ Handles authentication business logic:
 - Email verification
 - Password reset
 
----
-
 ## UserStore
 
 Handles persistence:
@@ -512,7 +417,16 @@ Handles persistence:
 - Update user
 - Delete user
 
----
+## RegisterUserInput
+
+Defines the minimal registration fields required by the authentication system.
+
+Required fields:
+
+- email
+- password
+
+This enables fully customizable application-specific registration DTOs.
 
 ## PasswordHasher
 
@@ -521,8 +435,6 @@ Handles password security:
 - Hash passwords
 - Verify passwords
 
----
-
 ## TokenManager
 
 Handles JWT operations:
@@ -530,33 +442,6 @@ Handles JWT operations:
 - Generate tokens
 - Verify tokens
 - Refresh tokens
-
----
-
-## TokenBlacklistStore
-
-Handles refresh token revocation.
-
----
-
-## OneTimeTokenStore
-
-Handles temporary token storage for:
-
-- Email verification
-- Password reset flows
-
----
-
-## EmailProvider
-
-Handles email delivery.
-
----
-
-## EmailTemplateConfig
-
-Handles customizable email templates.
 
 ---
 
@@ -571,13 +456,6 @@ Handles customizable email templates.
 | HTTP Framework | Axum or Actix |
 | Password Hashing | Argon2 |
 
-Redis is highly recommended for:
-
-- Refresh token blacklisting
-- One-time token storage
-- TTL-based expiration
-- Fast token lookup
-
 ---
 
 # Roadmap
@@ -589,6 +467,7 @@ Redis is highly recommended for:
 - [x] Email verification
 - [x] Password reset flow
 - [x] Pluggable storage backends
+- [x] Custom registration DTO support
 - [ ] Axum middleware
 - [ ] Actix middleware
 - [ ] Session management
@@ -598,10 +477,3 @@ Redis is highly recommended for:
 # License
 
 Apache-2.0
-
-
-
-
-
-
-

@@ -14,19 +14,27 @@ fn test_password_hashing() {
     println!("{}", hash);
 
     assert!(hasher.verify("password123", &hash));
-
     assert!(!hasher.verify("wrong-password", &hash));
 }
 
 #[tokio::test]
 async fn test_register_and_login_flow() {
     let mut auth = build_test_auth();
+
     // =========================
-    // REGISTER
+    // REGISTER (FIXED)
     // =========================
 
     let user = auth
-        .register("john@test.com".to_string(), "password123".to_string())
+        .register(RegisterDto {
+            email: "john@test.com".to_string(),
+            password: "password123".to_string(),
+            username: Some("john".to_string()),
+            phone: None,
+            country: None,
+            city: None,
+            age: None,
+        })
         .await
         .unwrap();
 
@@ -51,7 +59,6 @@ async fn test_register_and_login_flow() {
     let tokens = login.unwrap();
 
     assert!(!tokens.access_token.is_empty());
-
     assert!(!tokens.refresh_token.is_empty());
 
     // =========================
@@ -71,9 +78,17 @@ async fn test_register_and_login_flow() {
 async fn test_refresh_token_flow() {
     let mut auth = build_test_auth();
 
-    auth.register("refresh@test.com".to_string(), "password123".to_string())
-        .await
-        .unwrap();
+    auth.register(RegisterDto {
+        email: "refresh@test.com".to_string(),
+        password: "password123".to_string(),
+        username: None,
+        phone: None,
+        country: None,
+        city: None,
+        age: None,
+    })
+    .await
+    .unwrap();
 
     let login = auth
         .login("refresh@test.com", "password123")
@@ -96,7 +111,6 @@ async fn test_refresh_token_flow() {
     let new_tokens = refreshed.unwrap();
 
     assert!(!new_tokens.access_token.is_empty());
-
     assert!(!new_tokens.refresh_token.is_empty());
 }
 
@@ -104,9 +118,17 @@ async fn test_refresh_token_flow() {
 async fn test_refresh_token_blacklist_flow() {
     let mut auth = build_test_auth();
 
-    auth.register("blacklist@test.com".to_string(), "password123".to_string())
-        .await
-        .unwrap();
+    auth.register(RegisterDto {
+        email: "blacklist@test.com".to_string(),
+        password: "password123".to_string(),
+        username: None,
+        phone: None,
+        country: None,
+        city: None,
+        age: None,
+    })
+    .await
+    .unwrap();
 
     let login = auth
         .login("blacklist@test.com", "password123")
@@ -129,8 +151,7 @@ async fn test_refresh_token_blacklist_flow() {
     assert!(first.is_ok());
 
     // =========================
-    // SECOND REFRESH
-    // SHOULD FAIL
+    // SECOND REFRESH (SHOULD FAIL)
     // =========================
 
     let second = auth.refresh_token(&refresh_token).await;
