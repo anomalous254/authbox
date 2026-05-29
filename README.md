@@ -1,37 +1,32 @@
 # authbox
 
-A lightweight, modular authentication framework for Rust built around traits, async support, and pluggable components.
+A lightweight, modular, async-first authentication framework for Rust.
+
+`authbox` provides a flexible authentication system built around traits, pluggable components, and Tokio-ready async APIs.
+
+It is designed for applications that need customizable authentication logic without being locked into a specific database, framework, or storage backend.
 
 ---
 
-## It provides
+# Features
 
-- Password hashing (Argon2)
-- JWT authentication (access + refresh tokens)
+- Secure password hashing with Argon2
+- JWT access + refresh token authentication
 - Refresh token rotation
-- Refresh token blacklisting / revocation
-- Async-ready API (Tokio)
-- Pluggable architecture
-- Fully testable design
+- Refresh token revocation / blacklisting
+- Email verification flow
+- Password reset flow
+- One-time token (OTT) support
+- Fully async (`tokio`)
+- Trait-driven architecture
+- Pluggable storage backends
+- Framework agnostic
+- Test-friendly design
+- Builder API for ergonomic setup
 
 ---
 
-## Features
-
-- User registration & login flow
-- Secure password hashing using Argon2
-- JWT access + refresh token support
-- Refresh token rotation
-- Refresh token revocation support
-- Custom user store support (DB or in-memory)
-- Custom token managers
-- Custom password hashers
-- Fully async (`tokio` + `async-trait`)
-- Trait-based architecture for flexibility
-
----
-
-## Installation
+# Installation
 
 ```bash
 cargo add authbox
@@ -41,7 +36,7 @@ cargo add authbox
 
 # Quick Start
 
-## 1. Import prelude
+## Import Prelude
 
 ```rust
 use authbox::prelude::*;
@@ -49,47 +44,169 @@ use authbox::prelude::*;
 
 ---
 
-## 2. Create JWT manager
+# 1. Create Your User Type
 
-You can use the default `DefaultJwtManager`
-or create your own by implementing the `TokenManager` trait.
-
-Example using the default implementation:
+Your user model must implement the `AuthUser` trait.
 
 ```rust
-let tokens = DefaultJwtManager::new("my-secret-key");
+#[derive(Clone, Debug)]
+pub struct User {
+    pub id: String,
+    pub email: String,
+    pub password_hash: String,
+    pub is_email_verified: bool,
+}
+
+impl AuthUser for User {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn email(&self) -> &str {
+        &self.email
+    }
+
+    fn password_hash(&self) -> &str {
+        &self.password_hash
+    }
+
+    fn is_email_verified(&self) -> bool {
+        self.is_email_verified
+    }
+
+    fn set_email_verified(&mut self, verified: bool) {
+        self.is_email_verified = verified;
+    }
+
+    fn set_password_hash(&mut self, hash: String) {
+        self.password_hash = hash;
+    }
+}
 ```
 
 ---
 
-## 3. Create password hasher
+# 2. Create a User Store
 
-You can use the default `DefaultHasher`
-or create your own by implementing the `PasswordHasher` trait.
+`authbox` works with any backend:
 
-Example using the default implementation:
+- PostgreSQL
+- MySQL
+- SQLite
+- MongoDB
+- Redis
+- In-memory stores
+- Custom storage systems
+
+Implement the `UserStore` trait:
+
+```rust
+use async_trait::async_trait;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+#[derive(Clone)]
+pub struct UserStoreImpl {
+    pub users: Arc<Mutex<HashMap<String, User>>>,
+}
+
+impl UserStoreImpl {
+    pub fn new() -> Self {
+        Self {
+            users: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
+#[async_trait]
+impl UserStore for UserStoreImpl {
+    type Error = String;
+    type User = User;
+
+    async fn find_by_id(&self, user_id: &str) -> Option<User> {
+        let users = self.users.lock().unwrap();
+
+        users.get(user_id).cloned()
+    }
+
+    async fn find_by_email(&self, email: &str) -> Option<User> {
+        let users = self.users.lock().unwrap();
+
+        users.values().find(|u| u.email == email).cloned()
+    }
+
+    async fn create_user(
+        &self,
+        email: String,
+        pass_hash: String,
+    ) -> Result<User, Self::Error> {
+        let mut users = self.users.lock().unwrap();
+
+        let user = User {
+            id: email.clone(),
+            email,
+            password_hash: pass_hash,
+            is_email_verified: false,
+        };
+
+        users.insert(user.id.clone(), user.clone());
+
+        Ok(user)
+    }
+
+    async fn update_user(
+        &self,
+        user: User,
+    ) -> Result<User, Self::Error> {
+        let mut users = self.users.lock().unwrap();
+
+        users.insert(user.id.clone(), user.clone());
+
+        Ok(user)
+    }
+
+    async fn delete_user(
+        &self,
+        user_id: &str,
+    ) -> Result<(), Self::Error> {
+        let mut users = self.users.lock().unwrap();
+
+        users.remove(user_id);
+
+        Ok(())
+    }
+}
+```
+
+---
+
+# 3. Create a Password Hasher
+
+Use the built-in Argon2 hasher:
 
 ```rust
 let hasher = DefaultHasher;
 ```
 
+Or implement your own `PasswordHasher`.
+
 ---
 
-## 4. Create a token blacklist store
+# 4. Create a JWT Manager
 
-The blacklist store is used for refresh token revocation.
+Use the built-in JWT implementation:
 
-You can use:
+```rust
+let tokens = DefaultJwtManager::new("super-secret-key");
+```
 
-- Redis
-- PostgreSQL
-- SQLite
-- In-memory storage
-- Any custom backend
+Or implement your own `TokenManager`.
 
-by implementing the `TokenBlacklistStore` trait.
+---
 
-Example in-memory implementation:
+# 5. Create a Token Blacklist Store
+
+Used for refresh token revocation.
 
 ```rust
 use async_trait::async_trait;
@@ -97,12 +214,12 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
-struct MemoryBlacklistStore {
-    tokens: Arc<Mutex<HashSet<String>>>,
+pub struct MemoryBlacklistStore {
+    pub tokens: Arc<Mutex<HashSet<String>>>,
 }
 
 impl MemoryBlacklistStore {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             tokens: Arc::new(Mutex::new(HashSet::new())),
         }
@@ -110,7 +227,7 @@ impl MemoryBlacklistStore {
 }
 
 #[derive(Debug)]
-struct BlacklistError;
+pub struct BlacklistError;
 
 #[async_trait]
 impl TokenBlacklistStore for MemoryBlacklistStore {
@@ -141,126 +258,134 @@ impl TokenBlacklistStore for MemoryBlacklistStore {
 
 ---
 
-## 5. Implement a user type
+# 6. Create an OTT Store
 
-Your custom user type must implement the `AuthUser` trait.
+One-time token storage used for:
 
-Example:
+- Email verification
+- Password reset flows
 
 ```rust
 #[derive(Clone)]
-struct YourCustomUserType {
-    id: String,
-    email: String,
-    password_hash: String,
-
-    // Other fields...
+pub struct MemoryOttStore {
+    pub store: Arc<Mutex<HashMap<String, String>>>,
 }
 
-impl AuthUser for YourCustomUserType {
-    fn id(&self) -> String {
-        self.id.clone()
-    }
-
-    fn email(&self) -> &str {
-        &self.email
-    }
-
-    fn password_hash(&self) -> &str {
-        &self.password_hash
-    }
-}
-```
-
----
-
-## 6. Implement a user store
-
-You can use:
-
-- PostgreSQL
-- MySQL
-- SQLite
-- MongoDB
-- Redis
-- In-memory storage
-
-or any custom backend.
-
-Your store must implement the `UserStore<U>` trait.
-
-Example:
-
-```rust
-use std::collections::HashMap;
-
-struct MyDbStore {
-    users: HashMap<String, YourCustomUserType>,
-}
-
-impl MyDbStore {
-    fn new() -> Self {
+impl MemoryOttStore {
+    pub fn new() -> Self {
         Self {
-            users: HashMap::new(),
+            store: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
 
-impl UserStore<YourCustomUserType> for MyDbStore {
-    fn find_by_id(
+#[async_trait]
+impl OneTimeTokenStore for MemoryOttStore {
+    async fn set(
         &self,
-        user_id: &str,
-    ) -> Option<YourCustomUserType> {
-        self.users.get(user_id).cloned()
+        key: &str,
+        value: &str,
+        _: u64,
+    ) {
+        let mut store = self.store.lock().unwrap();
+
+        store.insert(key.to_string(), value.to_string());
     }
 
-    fn find_by_email(
+    async fn get(
         &self,
-        email: &str,
-    ) -> Option<YourCustomUserType> {
-        self.users
-            .values()
-            .find(|u| u.email == email)
-            .cloned()
+        key: &str,
+    ) -> Option<String> {
+        let store = self.store.lock().unwrap();
+
+        store.get(key).cloned()
     }
 
-    fn create_user(
-        &mut self,
-        email: String,
-        pass_hash: String,
-    ) -> YourCustomUserType {
-        let user = YourCustomUserType {
-            id: email.clone(),
-            email,
-            password_hash: pass_hash,
-        };
+    async fn delete(&self, key: &str) {
+        let mut store = self.store.lock().unwrap();
 
-        self.users.insert(user.id.clone(), user.clone());
-
-        user
+        store.remove(key);
     }
 }
 ```
 
 ---
 
-## 7. Create `AuthService`
+# 7. Create an Email Provider
 
 ```rust
-let store = MyDbStore::new();
+#[derive(Clone)]
+pub struct MockEmailSender;
 
-let tokens = DefaultJwtManager::new("my-secret-key");
+#[async_trait]
+impl EmailProvider for MockEmailSender {
+    type Error = ();
 
-let hasher = DefaultHasher;
+    async fn send_email(
+        &self,
+        to: &str,
+        subject: &str,
+        body: &str,
+    ) -> Result<(), Self::Error> {
+        println!("TO: {}", to);
+        println!("SUBJECT: {}", subject);
+        println!("BODY: {}", body);
 
-let blacklist = MemoryBlacklistStore::new();
+        Ok(())
+    }
+}
+```
 
-let mut auth = AuthService {
-    store,
-    hasher,
-    tokens,
-    blacklist,
-};
+---
+
+# 8. Create Email Templates
+
+```rust
+#[derive(Clone)]
+pub struct MockTemplates;
+
+#[async_trait]
+impl EmailTemplateConfig<User> for MockTemplates {
+    fn verify_email_subject(&self, _: &User) -> String {
+        "Verify Email".to_string()
+    }
+
+    fn verify_email_body(
+        &self,
+        _: &User,
+        token: &str,
+    ) -> String {
+        format!("verify token: {}", token)
+    }
+
+    fn reset_password_subject(&self, _: &User) -> String {
+        "Reset Password".to_string()
+    }
+
+    fn reset_password_body(
+        &self,
+        _: &User,
+        token: &str,
+    ) -> String {
+        format!("reset token: {}", token)
+    }
+}
+```
+
+---
+
+# 9. Build the Auth Service
+
+```rust
+let auth = AuthService::builder()
+    .store(UserStoreImpl::new())
+    .hasher(DefaultHasher)
+    .tokens(DefaultJwtManager::new("secret"))
+    .blacklist(MemoryBlacklistStore::new())
+    .email_sender(MockEmailSender)
+    .email_templates(MockTemplates)
+    .ott_store(MemoryOttStore::new())
+    .build();
 ```
 
 ---
@@ -269,11 +394,11 @@ let mut auth = AuthService {
 
 ```rust
 let user = auth
-    .register::<YourCustomUserType>(
+    .register(
         "user@mail.com".to_string(),
         "password123".to_string(),
     )
-    .await;
+    .await?;
 
 println!("User created: {}", user.email());
 ```
@@ -284,16 +409,16 @@ println!("User created: {}", user.email());
 
 ```rust
 let login = auth
-    .login::<YourCustomUserType>(
+    .login(
         "user@mail.com",
         "password123",
     )
     .await?;
 
 if let Some(tokens) = login {
-    println!("Access token: {}", tokens.access_token);
+    println!("Access Token: {}", tokens.access_token);
 
-    println!("Refresh token: {}", tokens.refresh_token);
+    println!("Refresh Token: {}", tokens.refresh_token);
 }
 ```
 
@@ -306,24 +431,55 @@ let new_tokens = auth
     .refresh_token(&refresh_token)
     .await?;
 
-println!(
-    "New access token: {}",
-    new_tokens.access_token
-);
+println!("{}", new_tokens.access_token);
 ```
 
 Old refresh tokens are automatically blacklisted after rotation.
 
 ---
 
-# Token Structure
+# Email Verification Flow
+
+## Request Verification
+
+Verification emails are automatically sent during registration.
+
+## Verify Email
+
+```rust
+auth.verify_email(&token).await;
+```
+
+---
+
+# Password Reset Flow
+
+## Request Password Reset
+
+```rust
+auth.request_password_reset("user@mail.com")
+    .await;
+```
+
+## Reset Password
+
+```rust
+auth.reset_password(
+    &token,
+    "new-password",
+).await;
+```
+
+---
+
+# Auth Token Structure
 
 ```rust
 pub struct AuthTokens {
     pub access_token: String,
     pub refresh_token: String,
     pub expires_in: usize,
-    pub token_type: String, // "Bearer"
+    pub token_type: String,
 }
 ```
 
@@ -331,7 +487,7 @@ pub struct AuthTokens {
 
 # Architecture
 
-`authbox` is built using traits for maximum flexibility.
+`authbox` is built around composable traits.
 
 ---
 
@@ -339,28 +495,11 @@ pub struct AuthTokens {
 
 Handles authentication business logic:
 
-- register
-- login
-- refresh token rotation
-
----
-
-## TokenManager
-
-Handles JWT operations:
-
-- generate
-- verify
-- refresh
-
----
-
-## PasswordHasher
-
-Handles password security:
-
-- hash
-- verify
+- Registration
+- Login
+- Refresh token rotation
+- Email verification
+- Password reset
 
 ---
 
@@ -368,39 +507,91 @@ Handles password security:
 
 Handles persistence:
 
-- create user
-- find user
+- Create user
+- Find user
+- Update user
+- Delete user
+
+---
+
+## PasswordHasher
+
+Handles password security:
+
+- Hash passwords
+- Verify passwords
+
+---
+
+## TokenManager
+
+Handles JWT operations:
+
+- Generate tokens
+- Verify tokens
+- Refresh tokens
 
 ---
 
 ## TokenBlacklistStore
 
-Handles refresh token revocation:
+Handles refresh token revocation.
 
-- blacklist token
-- check blacklist status
+---
+
+## OneTimeTokenStore
+
+Handles temporary token storage for:
+
+- Email verification
+- Password reset flows
+
+---
+
+## EmailProvider
+
+Handles email delivery.
+
+---
+
+## EmailTemplateConfig
+
+Handles customizable email templates.
 
 ---
 
 # Recommended Production Stack
 
-```text
-Redis is recommended for refresh token blacklisting because it supports automatic TTL expiration and very fast lookups.
-```
+| Component | Recommendation |
+|---|---|
+| Database | PostgreSQL |
+| ORM | SQLx or Diesel |
+| Cache / Token Store | Redis |
+| Runtime | Tokio |
+| HTTP Framework | Axum or Actix |
+| Password Hashing | Argon2 |
+
+Redis is highly recommended for:
+
+- Refresh token blacklisting
+- One-time token storage
+- TTL-based expiration
+- Fast token lookup
 
 ---
 
 # Roadmap
 
-## Roadmap
-
-- [x] Database adapters (SQLx, Diesel, MongoDB, and any backend storage supported via trait-based architecture)
-- [x] Token blacklist / revocation system (pluggable via `TokenBlacklistStore`)
-- [ ] RBAC (Role-based access control)
-- [ ] Middleware for Axum / Actix
-- [ ] Redis session support
-- [ ] Email verification
-- [ ] Password reset flow
+- [x] Async architecture
+- [x] JWT authentication
+- [x] Refresh token rotation
+- [x] Refresh token revocation
+- [x] Email verification
+- [x] Password reset flow
+- [x] Pluggable storage backends
+- [ ] Axum middleware
+- [ ] Actix middleware
+- [ ] Session management
 
 ---
 
