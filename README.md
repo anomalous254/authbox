@@ -49,24 +49,19 @@ use authbox::prelude::*;
 
 `authbox` supports fully customizable registration DTOs.
 
-The DTO name can be anything.
-
 ```rust
 #[derive(Clone, Debug)]
-pub struct SignupRequest {
+pub struct RegisterDto {
     // required auth fields
     pub email: String,
     pub password: String,
 
     // custom application fields
     pub username: Option<String>,
-    pub first_name: Option<String>,
-    pub last_name: Option<String>,
     pub phone: Option<String>,
     pub country: Option<String>,
     pub city: Option<String>,
     pub age: Option<u32>,
-    pub bio: Option<String>,
 }
 ```
 
@@ -80,7 +75,7 @@ pub struct SignupRequest {
 - password
 
 ```rust
-impl RegisterUserInput for SignupRequest {
+impl RegisterUserInput for RegisterDto {
     fn email(&self) -> &str {
         &self.email
     }
@@ -100,6 +95,7 @@ Your user model must implement the `AuthUser` trait.
 ```rust
 #[derive(Clone, Debug)]
 pub struct User {
+    // required fields
     pub id: String,
     pub email: String,
     pub password_hash: String,
@@ -107,13 +103,10 @@ pub struct User {
 
     // custom fields
     pub username: Option<String>,
-    pub first_name: Option<String>,
-    pub last_name: Option<String>,
     pub phone: Option<String>,
     pub country: Option<String>,
     pub city: Option<String>,
     pub age: Option<u32>,
-    pub bio: Option<String>,
 }
 
 impl AuthUser for User {
@@ -181,7 +174,7 @@ impl UserStore for UserStoreImpl {
     type User = User;
 
     // custom registration dto
-    type RegisterDto = SignupRequest;
+    type RegisterDto = RegisterDto;
 
     async fn find_by_id(&self, user_id: &str) -> Option<User> {
         let users = self.users.lock().unwrap();
@@ -197,7 +190,7 @@ impl UserStore for UserStoreImpl {
 
     async fn create_user(
         &self,
-        input: SignupRequest,
+        input: RegisterDto,
         pass_hash: String,
     ) -> Result<User, Self::Error> {
         let mut users = self.users.lock().unwrap();
@@ -209,13 +202,10 @@ impl UserStore for UserStoreImpl {
             is_email_verified: false,
 
             username: input.username,
-            first_name: input.first_name,
-            last_name: input.last_name,
             phone: input.phone,
             country: input.country,
             city: input.city,
             age: input.age,
-            bio: input.bio,
         };
 
         users.insert(user.id.clone(), user.clone());
@@ -249,7 +239,177 @@ impl UserStore for UserStoreImpl {
 
 ---
 
-# 4. Create a Password Hasher
+# 4. Configure Refresh Token Blacklist Store
+
+```rust
+use std::collections::HashSet;
+
+#[derive(Clone)]
+pub struct MemoryBlacklistStore {
+    pub tokens: Arc<Mutex<HashSet<String>>>,
+}
+
+impl MemoryBlacklistStore {
+    pub fn new() -> Self {
+        Self {
+            tokens: Arc::new(Mutex::new(HashSet::new())),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct BlacklistError;
+
+#[async_trait]
+impl TokenBlacklistStore for MemoryBlacklistStore {
+    type Error = BlacklistError;
+
+    async fn is_blacklisted(
+        &self,
+        jti: &str,
+    ) -> Result<bool, Self::Error> {
+        let store = self.tokens.lock().unwrap();
+
+        Ok(store.contains(jti))
+    }
+
+    async fn blacklist_token(
+        &self,
+        jti: &str,
+        _expires_at: i64,
+    ) -> Result<bool, Self::Error> {
+        let mut store = self.tokens.lock().unwrap();
+
+        store.insert(jti.to_string());
+
+        Ok(true)
+    }
+}
+```
+
+---
+
+# 5. Configure One-Time Token Store
+
+Used for:
+
+- Email verification
+- Password reset
+- One-time authentication flows
+
+```rust
+#[derive(Clone)]
+pub struct MemoryOttStore {
+    pub store: Arc<Mutex<HashMap<String, String>>>,
+}
+
+impl MemoryOttStore {
+    pub fn new() -> Self {
+        Self {
+            store: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
+#[async_trait]
+impl OneTimeTokenStore for MemoryOttStore {
+    async fn set(
+        &self,
+        key: &str,
+        value: &str,
+        _: u64,
+    ) {
+        let mut store = self.store.lock().unwrap();
+
+        store.insert(key.to_string(), value.to_string());
+    }
+
+    async fn get(&self, key: &str) -> Option<String> {
+        let store = self.store.lock().unwrap();
+
+        store.get(key).cloned()
+    }
+
+    async fn delete(&self, key: &str) {
+        let mut store = self.store.lock().unwrap();
+
+        store.remove(key);
+    }
+}
+```
+
+---
+
+# 6. Configure Email Provider
+
+```rust
+#[derive(Clone)]
+pub struct MockEmailSender;
+
+#[async_trait]
+impl EmailProvider for MockEmailSender {
+    type Error = ();
+
+    async fn send_email(
+        &self,
+        to: &str,
+        subject: &str,
+        body: &str,
+    ) -> Result<(), Self::Error> {
+        println!(
+            "\nEMAIL TO: {}\nSUBJECT: {}\nBODY: {}",
+            to,
+            subject,
+            body
+        );
+
+        Ok(())
+    }
+}
+```
+
+---
+
+# 7. Configure Email Templates
+
+```rust
+#[derive(Clone)]
+pub struct MockTemplates;
+
+#[async_trait]
+impl EmailTemplateConfig<User> for MockTemplates {
+    fn verify_email_subject(&self, _: &User) -> String {
+        "Verify Email".to_string()
+    }
+
+    fn verify_email_body(
+        &self,
+        _: &User,
+        token: &str,
+    ) -> String {
+        format!("verify token: {}", token)
+    }
+
+    fn reset_password_subject(
+        &self,
+        _: &User,
+    ) -> String {
+        "Reset Password".to_string()
+    }
+
+    fn reset_password_body(
+        &self,
+        _: &User,
+        token: &str,
+    ) -> String {
+        format!("reset token: {}", token)
+    }
+}
+```
+
+---
+
+# 8. Create Password Hasher
 
 Use the built-in Argon2 hasher:
 
@@ -261,7 +421,7 @@ Or implement your own `PasswordHasher`.
 
 ---
 
-# 5. Create a JWT Manager
+# 9. Create JWT Manager
 
 Use the built-in JWT implementation:
 
@@ -273,13 +433,17 @@ Or implement your own `TokenManager`.
 
 ---
 
-# 6. Build the Auth Service
+# 10. Build the Auth Service
 
 ```rust
 let auth = AuthService::builder()
     .store(UserStoreImpl::new())
     .hasher(DefaultHasher)
     .tokens(DefaultJwtManager::new("secret"))
+    .blacklist(MemoryBlacklistStore::new())
+    .email_sender(MockEmailSender)
+    .email_templates(MockTemplates)
+    .ott_store(MemoryOttStore::new())
     .build();
 ```
 
@@ -289,20 +453,15 @@ let auth = AuthService::builder()
 
 ```rust
 let user = auth
-    .register(SignupRequest {
-        email: "sarah.connor@example.com".to_string(),
-        password: "UltraSecurePassword123!".to_string(),
+    .register(RegisterDto {
+        email: "john@test.com".to_string(),
+        password: "password123".to_string(),
 
-        username: Some("sarahconnor".to_string()),
-        first_name: Some("Sarah".to_string()),
-        last_name: Some("Connor".to_string()),
-        phone: Some("+1-555-0199".to_string()),
-        country: Some("United States".to_string()),
-        city: Some("Los Angeles".to_string()),
-        age: Some(32),
-        bio: Some(
-            "Rust developer and cybersecurity enthusiast".to_string()
-        ),
+        username: Some("john".to_string()),
+        phone: None,
+        country: None,
+        city: None,
+        age: None,
     })
     .await?;
 
@@ -315,10 +474,7 @@ println!("User created: {}", user.email());
 
 ```rust
 let login = auth
-    .login(
-        "sarah.connor@example.com",
-        "UltraSecurePassword123!",
-    )
+    .login("john@test.com", "password123")
     .await?;
 
 if let Some(tokens) = login {
@@ -364,7 +520,7 @@ auth.verify_email(&token).await;
 
 ```rust
 auth.request_password_reset(
-    "sarah.connor@example.com",
+    "john@test.com",
 )
 .await;
 ```
@@ -443,6 +599,18 @@ Handles JWT operations:
 - Verify tokens
 - Refresh tokens
 
+## TokenBlacklistStore
+
+Handles revoked refresh tokens.
+
+## OneTimeTokenStore
+
+Handles temporary token storage for:
+
+- Email verification
+- Password reset
+- OTT authentication flows
+
 ---
 
 # Recommended Production Stack
@@ -466,6 +634,7 @@ Handles JWT operations:
 - [x] Refresh token revocation
 - [x] Email verification
 - [x] Password reset flow
+- [x] One-time token support
 - [x] Pluggable storage backends
 - [x] Custom registration DTO support
 - [ ] Axum middleware
