@@ -9,6 +9,14 @@ pub enum AuthError<T, B> {
     BlacklistedToken,
 }
 
+#[derive(Debug)]
+pub enum LoginError<T, S> {
+    InvalidCredentials,
+    EmailNotVerified,
+    Store(S),
+    Token(T),
+}
+
 pub struct AuthService<S, P, T, B, E, M, V> {
     pub store: S,
     pub hasher: P,
@@ -55,7 +63,11 @@ impl<S, P, T, B, E, M, V> AuthService<S, P, T, B, E, M, V> {
     }
 
     /// Login and return token if credentials are valid
-    pub async fn login(&self, email: &str, password: &str) -> Result<Option<T::Token>, T::Error>
+    pub async fn login(
+        &self,
+        email: &str,
+        password: &str,
+    ) -> Result<T::Token, LoginError<T::Error, S::Error>>
     where
         S: UserStore,
         P: PasswordHasher,
@@ -63,18 +75,29 @@ impl<S, P, T, B, E, M, V> AuthService<S, P, T, B, E, M, V> {
     {
         let user = match self.store.find_by_email(email).await {
             Some(user) => user,
-            None => return Ok(None),
+            None => return Err(LoginError::InvalidCredentials),
         };
+
+        let verified = self
+            .store
+            .is_email_verified(&user.id())
+            .await
+            .map_err(LoginError::Store)?;
+
+        if !verified {
+            return Err(LoginError::EmailNotVerified);
+        }
 
         let valid = self.hasher.verify(password, user.password_hash());
 
         if !valid {
-            return Ok(None);
+            return Err(LoginError::InvalidCredentials);
         }
 
-        let token = self.tokens.generate(&user.id()).await?;
-
-        Ok(Some(token))
+        self.tokens
+            .generate(&user.id())
+            .await
+            .map_err(LoginError::Token)
     }
 
     /// Refresh access token

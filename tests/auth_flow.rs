@@ -22,7 +22,7 @@ async fn test_register_and_login_flow() {
     let mut auth = build_test_auth();
 
     // =========================
-    // REGISTER (FIXED)
+    // REGISTER
     // =========================
 
     let user = auth
@@ -45,18 +45,36 @@ async fn test_register_and_login_flow() {
     assert_eq!(user.email(), "john@test.com");
 
     // =========================
+    // LOGIN BEFORE VERIFY
+    // =========================
+
+    let unverified = auth.login("john@test.com", "password123").await;
+
+    println!();
+    println!("=== LOGIN UNVERIFIED ===");
+    println!("{:#?}", unverified);
+
+    assert!(matches!(unverified, Err(LoginError::EmailNotVerified)));
+
+    // =========================
+    // VERIFY EMAIL
+    // =========================
+
+    let mut verified_user = auth.store.find_by_email("john@test.com").await.unwrap();
+
+    verified_user.set_email_verified(true);
+
+    auth.store.update_user(verified_user).await.unwrap();
+
+    // =========================
     // LOGIN SUCCESS
     // =========================
 
-    let login = auth.login("john@test.com", "password123").await.unwrap();
+    let tokens = auth.login("john@test.com", "password123").await.unwrap();
 
     println!();
     println!("=== LOGIN SUCCESS ===");
-    println!("{:#?}", login);
-
-    assert!(login.is_some());
-
-    let tokens = login.unwrap();
+    println!("{:#?}", tokens);
 
     assert!(!tokens.access_token.is_empty());
     assert!(!tokens.refresh_token.is_empty());
@@ -65,13 +83,13 @@ async fn test_register_and_login_flow() {
     // LOGIN FAIL
     // =========================
 
-    let failed = auth.login("john@test.com", "wrong-password").await.unwrap();
+    let failed = auth.login("john@test.com", "wrong-password").await;
 
     println!();
     println!("=== LOGIN FAILED ===");
     println!("{:#?}", failed);
 
-    assert!(failed.is_none());
+    assert!(matches!(failed, Err(LoginError::InvalidCredentials)));
 }
 
 #[tokio::test]
@@ -90,15 +108,29 @@ async fn test_refresh_token_flow() {
     .await
     .unwrap();
 
-    let login = auth
-        .login("refresh@test.com", "password123")
-        .await
-        .unwrap()
-        .unwrap();
+    // =========================
+    // VERIFY EMAIL
+    // =========================
+
+    let mut user = auth.store.find_by_email("refresh@test.com").await.unwrap();
+
+    user.set_email_verified(true);
+
+    auth.store.update_user(user).await.unwrap();
+
+    // =========================
+    // LOGIN
+    // =========================
+
+    let login = auth.login("refresh@test.com", "password123").await.unwrap();
 
     println!();
     println!("=== ORIGINAL TOKENS ===");
     println!("{:#?}", login);
+
+    // =========================
+    // REFRESH
+    // =========================
 
     let refreshed = auth.refresh_token(&login.refresh_token).await;
 
@@ -130,10 +162,27 @@ async fn test_refresh_token_blacklist_flow() {
     .await
     .unwrap();
 
+    // =========================
+    // VERIFY EMAIL
+    // =========================
+
+    let mut user = auth
+        .store
+        .find_by_email("blacklist@test.com")
+        .await
+        .unwrap();
+
+    user.set_email_verified(true);
+
+    auth.store.update_user(user).await.unwrap();
+
+    // =========================
+    // LOGIN
+    // =========================
+
     let login = auth
         .login("blacklist@test.com", "password123")
         .await
-        .unwrap()
         .unwrap();
 
     let refresh_token = login.refresh_token.clone();
@@ -151,7 +200,7 @@ async fn test_refresh_token_blacklist_flow() {
     assert!(first.is_ok());
 
     // =========================
-    // SECOND REFRESH (SHOULD FAIL)
+    // SECOND REFRESH
     // =========================
 
     let second = auth.refresh_token(&refresh_token).await;

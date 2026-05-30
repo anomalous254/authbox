@@ -152,6 +152,15 @@ impl UserStore for TestStore {
         users.remove(user_id);
         Ok(())
     }
+
+    async fn is_email_verified(&self, user_id: &str) -> Result<bool, Self::Error> {
+        let users = self.users.lock().unwrap();
+
+        match users.get(user_id) {
+            Some(user) => Ok(user.is_email_verified),
+            None => Err("user not found".to_string()),
+        }
+    }
 }
 
 // =========================

@@ -8,7 +8,7 @@ async fn test_email_verification_flow() {
     let mut auth = build_test_auth();
 
     // =========================
-    // REGISTER (FIXED)
+    // REGISTER
     // =========================
 
     let user = auth
@@ -63,7 +63,7 @@ async fn test_password_reset_flow() {
     let mut auth = build_test_auth();
 
     // =========================
-    // REGISTER (FIXED)
+    // REGISTER
     // =========================
 
     auth.register(RegisterDto {
@@ -77,6 +77,16 @@ async fn test_password_reset_flow() {
     })
     .await
     .unwrap();
+
+    // =========================
+    // VERIFY EMAIL
+    // =========================
+
+    let mut user = auth.store.find_by_email("reset@test.com").await.unwrap();
+
+    user.set_email_verified(true);
+
+    auth.store.update_user(user).await.unwrap();
 
     // =========================
     // REQUEST RESET
@@ -107,11 +117,12 @@ async fn test_password_reset_flow() {
     // LOGIN WITH NEW PASSWORD
     // =========================
 
-    let login = auth.login("reset@test.com", "new-password").await.unwrap();
+    let tokens = auth.login("reset@test.com", "new-password").await.unwrap();
 
     println!();
     println!("=== LOGIN AFTER RESET ===");
-    println!("{:#?}", login);
+    println!("{:#?}", tokens);
 
-    assert!(login.is_some());
+    assert!(!tokens.access_token.is_empty());
+    assert!(!tokens.refresh_token.is_empty());
 }
