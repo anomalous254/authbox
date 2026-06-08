@@ -191,7 +191,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "async-trait",
- "authbox",
+ "authbox 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_json",
  "tokio",
@@ -269,6 +269,19 @@ dependencies = [
 [[package]]
 name = "authbox"
 version = "1.0.1"
+dependencies = [
+ "async-trait",
+ "authbox-argon2 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "authbox-core 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "authbox-jwt 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tokio",
+]
+
+[[package]]
+name = "authbox"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bcc53ee02fd9e58dc64dd73b10d42b64867edb744569f340d9356e288183126"
 dependencies = [
  "async-trait",
  "authbox-argon2 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",

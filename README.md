@@ -74,10 +74,8 @@ cargo add authbox
 - [x] One-time token support
 - [x] Pluggable storage backends
 - [x] Custom registration DTO support
-- [ ] Axum middleware
-- [ ] Actix middleware
-- [ ] Session management
-
+- [x] Any web Framework
+- [x] Middlewares [ ** In your authentication Middlewares check use the `is_token_valid()`) method ** ]
 ---
 
 # License
