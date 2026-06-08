@@ -9,7 +9,7 @@ readme = "../../README.md"
 authors = ["anomalous254"]
 
 [dependencies]
-authbox-core = { path = "../authbox-core" }
+authbox-core = "1.0.0"
 argon2 = {version = "0.5.3",  features=["password-hash"]}
 rand_core = { version="0.6", features=["getrandom"]}
 
