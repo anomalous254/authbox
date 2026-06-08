@@ -1,6 +1,6 @@
 [package]
 name = "authbox"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 description = "A lightweight, modular authentication framework for Rust built around traits, async support, and pluggable component"
 license = "Apache-2.0"
@@ -13,8 +13,8 @@ categories = ["authentication", "web-programming"]
 authors = ["anomalous254"]
 
 [dependencies]
-authbox-core = { path = "../authbox-core" }
-authbox-jwt = { path = "../authbox-jwt" }
-authbox-argon2 = { path = "../authbox-argon2" }
+authbox-core = "1.0.1"
+authbox-jwt = "1.0.1"
+authbox-argon2 = "1.0.1"
 async-trait = "0.1.89"
 tokio = { version = "1", features = ["full"] }
