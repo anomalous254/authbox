@@ -3,7 +3,7 @@ use async_trait::async_trait;
 #[async_trait]
 pub trait TokenManager {
     type Token;
-    type Claims;
+    type Claims: 'static;
     type Error;
 
     async fn generate(&self, user_id: &str) -> Result<Self::Token, Self::Error>;

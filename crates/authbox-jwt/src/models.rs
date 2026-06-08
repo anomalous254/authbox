@@ -4,17 +4,17 @@ use serde::{Deserialize, Serialize};
 pub struct AuthTokens {
     pub access_token: String,
     pub refresh_token: String,
-    pub expires_in: usize,
+    pub access_expires_at: i64,
     pub token_type: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TokenType {
     Access,
     Refresh,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JwtClaims {
     pub sub: String,
     pub exp: i64,

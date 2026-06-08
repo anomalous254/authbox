@@ -7,6 +7,7 @@ use argon2::{
 
 use rand_core::OsRng;
 
+#[derive(Debug, Clone)]
 pub struct DefaultHasher;
 
 impl PasswordHasher for DefaultHasher {

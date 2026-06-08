@@ -3,10 +3,17 @@ use crate::traits::*;
 use uuid::Uuid;
 
 #[derive(Debug)]
-pub enum AuthError<T, B> {
+pub enum AuthError<S, T, B> {
+    Store(S),
     Token(T),
     Blacklist(B),
+
     BlacklistedToken,
+    EmailAlreadyExists,
+
+    NotFound,
+    InvalidToken,
+    EmailAlreadyVerified,
 }
 
 #[derive(Debug)]
@@ -17,6 +24,7 @@ pub enum LoginError<T, S> {
     Token(T),
 }
 
+#[derive(Debug, Clone)]
 pub struct AuthService<S, P, T, B, E, M, V> {
     pub store: S,
     pub hasher: P,
@@ -28,13 +36,15 @@ pub struct AuthService<S, P, T, B, E, M, V> {
 }
 
 impl<S, P, T, B, E, M, V> AuthService<S, P, T, B, E, M, V> {
-    /// builder constructor
     pub fn builder() -> AuthServiceBuilder<S, P, T, B, E, M, V> {
         AuthServiceBuilder::new()
     }
 
     /// Register a new user
-    pub async fn register(&mut self, input: S::RegisterDto) -> Result<S::User, S::Error>
+    pub async fn register(
+        &mut self,
+        input: S::RegisterDto,
+    ) -> Result<S::User, AuthError<S::Error, T::Error, B::Error>>
     where
         S: UserStore,
         P: PasswordHasher,
@@ -44,11 +54,18 @@ impl<S, P, T, B, E, M, V> AuthService<S, P, T, B, E, M, V> {
         M: EmailTemplateConfig<S::User>,
         V: OneTimeTokenStore,
     {
+        if self.store.find_by_email(input.email()).await.is_some() {
+            return Err(AuthError::EmailAlreadyExists);
+        }
+
         let hash = self.hasher.hash(input.password());
-        let user = self.store.create_user(input, hash).await?;
+        let user = self
+            .store
+            .create_user(input, hash)
+            .await
+            .map_err(AuthError::Store)?;
 
         let token = Uuid::new_v4().to_string();
-
         self.ott_store.set(&token, &user.id(), 60 * 60 * 24).await;
 
         let subject = self.email_templates.verify_email_subject(&user);
@@ -73,14 +90,15 @@ impl<S, P, T, B, E, M, V> AuthService<S, P, T, B, E, M, V> {
         P: PasswordHasher,
         T: TokenManager,
     {
-        let user = match self.store.find_by_email(email).await {
-            Some(user) => user,
-            None => return Err(LoginError::InvalidCredentials),
-        };
+        let user = self
+            .store
+            .find_by_email(email)
+            .await
+            .ok_or(LoginError::InvalidCredentials)?;
 
         let verified = self
             .store
-            .is_email_verified(&user.id())
+            .check_email_verified(&user.id())
             .await
             .map_err(LoginError::Store)?;
 
@@ -88,9 +106,7 @@ impl<S, P, T, B, E, M, V> AuthService<S, P, T, B, E, M, V> {
             return Err(LoginError::EmailNotVerified);
         }
 
-        let valid = self.hasher.verify(password, user.password_hash());
-
-        if !valid {
+        if !self.hasher.verify(password, user.password_hash()) {
             return Err(LoginError::InvalidCredentials);
         }
 
@@ -104,7 +120,7 @@ impl<S, P, T, B, E, M, V> AuthService<S, P, T, B, E, M, V> {
     pub async fn refresh_token(
         &self,
         refresh_token: &str,
-    ) -> Result<T::Token, AuthError<T::Error, B::Error>>
+    ) -> Result<T::Token, AuthError<(), T::Error, B::Error>>
     where
         T: TokenManager,
         T::Claims: BlacklistableClaims,
@@ -138,21 +154,45 @@ impl<S, P, T, B, E, M, V> AuthService<S, P, T, B, E, M, V> {
     }
 
     /// Verify email
-    pub async fn verify_email(&self, token: &str)
+    pub async fn verify_email(&self, token: &str) -> Result<(), AuthError<S::Error, (), ()>>
     where
         S: UserStore,
         V: OneTimeTokenStore,
     {
-        if let Some(user_id) = self.ott_store.get(token).await {
-            let mut user = self.store.find_by_id(&user_id).await.unwrap();
-            user.set_email_verified(true);
-            let _ = self.store.update_user(user).await;
+        let user_id = self
+            .ott_store
+            .get(token)
+            .await
+            .ok_or(AuthError::InvalidToken)?;
 
-            self.ott_store.delete(token).await;
+        let mut user = self
+            .store
+            .find_by_id(&user_id)
+            .await
+            .ok_or(AuthError::NotFound)?;
+
+        let is_verified = self
+            .store
+            .check_email_verified(&user_id)
+            .await
+            .map_err(AuthError::Store)?;
+
+        if is_verified {
+            return Err(AuthError::EmailAlreadyVerified);
         }
+
+        user.set_email_verified(true);
+
+        self.store
+            .update_user(user)
+            .await
+            .map_err(AuthError::Store)?;
+        self.ott_store.delete(token).await;
+
+        Ok(())
     }
 
-    /// request password reset
+    /// Request password reset
     pub async fn request_password_reset(&self, email: &str)
     where
         S: UserStore,
@@ -162,7 +202,6 @@ impl<S, P, T, B, E, M, V> AuthService<S, P, T, B, E, M, V> {
     {
         if let Some(user) = self.store.find_by_email(email).await {
             let token = Uuid::new_v4().to_string();
-
             self.ott_store.set(&token, &user.id(), 60 * 15).await;
 
             let subject = self.email_templates.reset_password_subject(&user);
@@ -175,22 +214,62 @@ impl<S, P, T, B, E, M, V> AuthService<S, P, T, B, E, M, V> {
         }
     }
 
-    /// reset password
-    pub async fn reset_password(&self, token: &str, new_password: &str)
+    /// Reset password
+    pub async fn reset_password(
+        &self,
+        token: &str,
+        new_password: &str,
+    ) -> Result<(), AuthError<S::Error, (), ()>>
     where
         S: UserStore,
-        V: OneTimeTokenStore,
         P: PasswordHasher,
+        V: OneTimeTokenStore,
     {
-        if let Some(user_id) = self.ott_store.get(token).await
-            && let Some(mut user) = self.store.find_by_id(&user_id).await
-        {
-            let password_hash = self.hasher.hash(new_password);
-            user.set_password_hash(password_hash);
+        let user_id = self
+            .ott_store
+            .get(token)
+            .await
+            .ok_or(AuthError::InvalidToken)?;
+        let mut user = self
+            .store
+            .find_by_id(&user_id)
+            .await
+            .ok_or(AuthError::NotFound)?;
 
-            let _ = self.store.update_user(user).await;
+        let password_hash = self.hasher.hash(new_password);
+        user.set_password_hash(password_hash);
 
-            self.ott_store.delete(token).await;
+        self.store
+            .update_user(user)
+            .await
+            .map_err(AuthError::Store)?;
+        self.ott_store.delete(token).await;
+
+        Ok(())
+    }
+
+    /// Check if token is valid
+    pub async fn is_token_valid(
+        &self,
+        token: &str,
+    ) -> Result<T::Claims, AuthError<(), T::Error, B::Error>>
+    where
+        T: TokenManager,
+        T::Claims: BlacklistableClaims,
+        B: TokenBlacklistStore,
+    {
+        let claims = self.tokens.verify(token).await.map_err(AuthError::Token)?;
+
+        let blacklisted = self
+            .blacklist
+            .is_blacklisted(claims.jti())
+            .await
+            .map_err(AuthError::Blacklist)?;
+
+        if blacklisted {
+            return Err(AuthError::BlacklistedToken);
         }
+
+        Ok(claims)
     }
 }

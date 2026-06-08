@@ -4,6 +4,7 @@ resolver = "2"
 members = [
   "crates/authbox-core",
   "crates/authbox-jwt",
-  "crates/authbox-argon2",
+  "crates/authbox-argon2", 
   "crates/authbox",
+  "examples/actix_web",
 ]

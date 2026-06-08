@@ -43,7 +43,8 @@ async fn test_email_verification_flow() {
     // VERIFY EMAIL
     // =========================
 
-    auth.verify_email(&token).await;
+    let result = auth.verify_email(&token).await;
+    assert!(result.is_ok(), "First verification should succeed");
 
     // =========================
     // FETCH UPDATED USER
@@ -111,7 +112,8 @@ async fn test_password_reset_flow() {
     // RESET PASSWORD
     // =========================
 
-    auth.reset_password(&token, "new-password").await;
+    let result = auth.reset_password(&token, "new-password").await;
+    assert!(result.is_ok(), "Password reset should succeed");
 
     // =========================
     // LOGIN WITH NEW PASSWORD

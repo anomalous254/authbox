@@ -17,5 +17,5 @@ pub trait UserStore {
     ) -> Result<Self::User, Self::Error>;
     async fn update_user(&self, user: Self::User) -> Result<Self::User, Self::Error>;
     async fn delete_user(&self, user_id: &str) -> Result<(), Self::Error>;
-    async fn is_email_verified(&self, user_id: &str) -> Result<bool, Self::Error>;
+    async fn check_email_verified(&self, user_id: &str) -> Result<bool, Self::Error>;
 }

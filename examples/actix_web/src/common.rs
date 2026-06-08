@@ -1,13 +1,17 @@
+#![allow(unused)]
+
 use async_trait::async_trait;
 use authbox::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use uuid::Uuid;
 
 // =========================
 // REGISTER DTO (MANY FIELDS)
 // =========================
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct RegisterDto {
     pub email: String,
     pub password: String,
@@ -37,11 +41,12 @@ impl RegisterUserInput for RegisterDto {
 // USER MODEL
 // =========================
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 #[allow(unused)]
 pub struct TestUser {
     pub id: String,
     pub email: String,
+    #[serde(skip_serializing)]
     pub password_hash: String,
 
     pub is_email_verified: bool,
@@ -124,7 +129,7 @@ impl UserStore for TestStore {
         let mut users = self.users.lock().unwrap();
 
         let user = TestUser {
-            id: input.email.clone(),
+            id: Uuid::new_v4().to_string(),
             email: input.email,
             password_hash: pass_hash,
             is_email_verified: false,
@@ -265,7 +270,7 @@ impl EmailTemplateConfig<TestUser> for MockTemplates {
     }
 
     fn verify_email_body(&self, _: &TestUser, token: &str) -> String {
-        format!("verify token: {}", token)
+        format!("verify email token: {}", token)
     }
 
     fn reset_password_subject(&self, _: &TestUser) -> String {
@@ -273,7 +278,7 @@ impl EmailTemplateConfig<TestUser> for MockTemplates {
     }
 
     fn reset_password_body(&self, _: &TestUser, token: &str) -> String {
-        format!("reset token: {}", token)
+        format!("reset password token: {}", token)
     }
 }
 
@@ -281,7 +286,7 @@ impl EmailTemplateConfig<TestUser> for MockTemplates {
 // TEST AUTH SERVICE TYPE
 // =========================
 
-type TestAuthService = AuthService<
+pub type TestAuthService = AuthService<
     TestStore,
     DefaultHasher,
     DefaultJwtManager,
