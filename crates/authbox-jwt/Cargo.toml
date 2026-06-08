@@ -9,7 +9,7 @@ readme = "../../README.md"
 authors = ["anomalous254"]
 
 [dependencies]
-authbox-core = { path = "../authbox-core" }
+authbox-core = "1.0.0"
 jsonwebtoken = { version = "10.3.0", features = ["aws_lc_rs"] }
 serde = { version = "1", features = ["derive"] }
 uuid = {version="1.23.1", features=["v4"]}
