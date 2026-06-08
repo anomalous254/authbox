@@ -1,36 +1,26 @@
-use crate::traits::{BlacklistableClaims, TokenManager};
+use super::errors::JwtError;
+use super::models::{AuthTokens, JwtClaims, TokenType};
 use async_trait::async_trait;
+use authbox_core::prelude::{BlacklistableClaims, TokenManager};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub struct DefaultJwtManager {
-    secret_key: String,
+    pub secret_key: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AuthTokens {
-    pub access_token: String,
-    pub refresh_token: String,
-    pub expires_in: usize,
-    pub token_type: String,
+/// Default JWT implementation
+impl DefaultJwtManager {
+    pub fn new<T: Into<String>>(secret_key: T) -> Self {
+        Self {
+            secret_key: secret_key.into(),
+        }
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum TokenType {
-    Access,
-    Refresh,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct JwtClaims {
-    pub sub: String,
-    pub exp: i64,
-    pub jti: String,
-    pub token_type: TokenType,
-}
-
+/// JwtClaims type must implement BlacklistableClaims trait
+/// For token revocation
 impl BlacklistableClaims for JwtClaims {
     fn jti(&self) -> &str {
         &self.jti
@@ -38,21 +28,6 @@ impl BlacklistableClaims for JwtClaims {
 
     fn exp(&self) -> i64 {
         self.exp
-    }
-}
-
-#[derive(Debug)]
-pub enum JwtError {
-    Encode(jsonwebtoken::errors::Error),
-    Decode(jsonwebtoken::errors::Error),
-    InvalidTokenType,
-}
-
-impl DefaultJwtManager {
-    pub fn new<T: Into<String>>(secret_key: T) -> Self {
-        Self {
-            secret_key: secret_key.into(),
-        }
     }
 }
 

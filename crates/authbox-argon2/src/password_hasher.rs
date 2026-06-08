@@ -1,4 +1,4 @@
-use crate::traits::PasswordHasher;
+use authbox_core::prelude::PasswordHasher;
 
 use argon2::{
     Argon2, PasswordVerifier,

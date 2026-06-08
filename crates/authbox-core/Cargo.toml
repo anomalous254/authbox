@@ -1,0 +1,21 @@
+[package]
+name = "authbox-core"
+version = "1.0.0"
+edition = "2024"
+description = "Core authentication traits and types for AuthBox"
+license = "Apache-2.0"
+repository = "https://github.com/anomalous254/authbox"
+readme = "../../README.md"
+keywords = ["auth", "jwt", "security"]
+categories = ["authentication", "web-programming"]
+authors = ["anomalous254"]
+
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+async-trait = "0.1.89"
+uuid = {version="1.23.1", features=["v4"]}
+
+
+

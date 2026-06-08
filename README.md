@@ -8,17 +8,21 @@ It is designed for applications that need customizable authentication logic with
 
 ---
 
-# Documentation
+## Documentation
 
 **Full documentation, guides, examples, and architecture overview available here:**
 
 [AuthBox Docs](https://authbox-docs.vercel.app/)
 
 
----
+## Architecture
+
+1. authbox-core (traits + engine)
+2. authbox-jwt (JWT provider)
+3. authbox-argon2 (password hashing)
 
 
-# Features
+## Features
 
 - Secure password hashing with Argon2
 - JWT access + refresh token authentication

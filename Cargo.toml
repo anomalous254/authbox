@@ -1,33 +1,9 @@
-[package]
-name = "authbox"
-version = "0.2.7"
-edition = "2024"
-description = "A lightweight, modular authentication framework for Rust built around traits, async support, and pluggable component"
-license = "Apache-2.0"
-repository = "https://github.com/anomalous254/authbox"
-homepage = "https://github.com/anomalous254/authbox"
-documentation = "https://docs.rs/authbox"
-readme = "README.md"
-keywords = ["authentication", "jwt", "actix", "security", "auth"]
-categories = ["authentication", "web-programming"]
-authors = ["anomalous254"]
+[workspace]
+resolver = "2"
 
-
-[dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1", features = ["full"] }
-argon2 = {version = "0.5.3",  features=["password-hash"]}
-actix-web = "4.13.0"
-actix-files = "0.6.10"
-jsonwebtoken = { version = "10.3.0", features = ["aws_lc_rs"] }
-actix-web-httpauth = "0.8.2"
-async-trait = "0.1.89"
-chrono = "0.4.44"
-rand_core = { version="0.6", features=["getrandom"]}
-uuid = {version="1.23.1", features=["v4"]}
-
-
-[lib]
-name = "authbox"
-path = "src/lib.rs"
+members = [
+  "crates/authbox-core",
+  "crates/authbox-jwt",
+  "crates/authbox-argon2",
+  "crates/authbox",
+]
