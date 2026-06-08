@@ -45,15 +45,26 @@ name = "authbox"
 version = "1.0.0"
 dependencies = [
  "async-trait",
- "authbox-argon2",
+ "authbox-argon2 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "authbox-core 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "authbox-jwt",
+ "authbox-jwt 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio",
 ]
 
 [[package]]
 name = "authbox-argon2"
 version = "0.1.0"
+dependencies = [
+ "argon2",
+ "authbox-core 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand_core",
+]
+
+[[package]]
+name = "authbox-argon2"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "589b10ef203772cfdd4b4635663274a55b30d9d5933de35694612e870a36249a"
 dependencies = [
  "argon2",
  "authbox-core 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -85,6 +96,20 @@ dependencies = [
 [[package]]
 name = "authbox-jwt"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "authbox-core 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono",
+ "jsonwebtoken",
+ "serde",
+ "uuid",
+]
+
+[[package]]
+name = "authbox-jwt"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "600869e9b7de9f8a896a85877693e93fbe069db36663f83ec57a71e4642aeb10"
 dependencies = [
  "async-trait",
  "authbox-core 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
