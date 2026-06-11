@@ -169,77 +169,6 @@ impl UserStore for TestStore {
 }
 
 // =========================
-// BLACKLIST STORE
-// =========================
-
-#[derive(Clone)]
-pub struct MemoryBlacklistStore {
-    pub tokens: Arc<Mutex<HashSet<String>>>,
-}
-
-impl MemoryBlacklistStore {
-    pub fn new() -> Self {
-        Self {
-            tokens: Arc::new(Mutex::new(HashSet::new())),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct BlacklistError;
-
-#[async_trait]
-impl TokenBlacklistStore for MemoryBlacklistStore {
-    type Error = BlacklistError;
-
-    async fn is_blacklisted(&self, jti: &str) -> Result<bool, Self::Error> {
-        let store = self.tokens.lock().unwrap();
-        Ok(store.contains(jti))
-    }
-
-    async fn blacklist_token(&self, jti: &str, _expires_at: i64) -> Result<bool, Self::Error> {
-        let mut store = self.tokens.lock().unwrap();
-        store.insert(jti.to_string());
-        Ok(true)
-    }
-}
-
-// =========================
-// OTT STORE
-// =========================
-
-#[derive(Clone)]
-pub struct MemoryOttStore {
-    pub store: Arc<Mutex<HashMap<String, String>>>,
-}
-
-impl MemoryOttStore {
-    pub fn new() -> Self {
-        Self {
-            store: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-}
-
-#[async_trait]
-impl OneTimeTokenStore for MemoryOttStore {
-    async fn set(&self, key: &str, value: &str, _: u64) {
-        let mut store = self.store.lock().unwrap();
-        store.insert(key.to_string(), value.to_string());
-    }
-
-    async fn get(&self, key: &str) -> Option<String> {
-        let store = self.store.lock().unwrap();
-        store.get(key).cloned()
-    }
-
-    async fn delete(&self, key: &str) {
-        let mut store = self.store.lock().unwrap();
-        store.remove(key);
-    }
-}
-
-// =========================
 // EMAIL PROVIDER
 // =========================
 
@@ -290,20 +219,22 @@ pub type TestAuthService = AuthService<
     TestStore,
     DefaultHasher,
     DefaultJwtManager,
-    MemoryBlacklistStore,
+    RedisBlacklistStore,
     MockEmailSender,
     MockTemplates,
-    MemoryOttStore,
+    RedisOttStore,
 >;
 
 pub fn build_test_auth() -> TestAuthService {
+    let client = redis::Client::open("redis://127.0.0.1/").expect("failed to connect to redis");
+
     AuthService::builder()
         .store(TestStore::new())
         .hasher(DefaultHasher)
         .tokens(DefaultJwtManager::new("secret"))
-        .blacklist(MemoryBlacklistStore::new())
+        .blacklist(RedisBlacklistStore::new(client.clone()))
         .email_sender(MockEmailSender)
         .email_templates(MockTemplates)
-        .ott_store(MemoryOttStore::new())
+        .ott_store(RedisOttStore::new(client))
         .build()
 }

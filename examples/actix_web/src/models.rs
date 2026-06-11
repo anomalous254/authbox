@@ -1,3 +1,4 @@
+#![allow(unused)]
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -25,4 +26,9 @@ pub struct ResetPasswordRequest {
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LogOutRequest {
+    pub refresh_token: String,
 }

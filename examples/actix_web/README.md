@@ -165,3 +165,18 @@ curl -X POST http://127.0.0.1:8080/reset-password \
   "password":"new-password"
 }'
 ```
+
+
+
+### Logout User
+
+Invalidate your refresh token and log the user out. Send a POST request with the refresh token in the request body
+
+```bash
+curl -X POST http://127.0.0.1:8080/logout \
+-H "Content-Type: application/json" \
+-d '{
+  "refresh_token": "YOUR_REFRESH_TOKEN"
+}'
+```
+```

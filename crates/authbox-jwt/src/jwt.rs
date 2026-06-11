@@ -39,7 +39,7 @@ impl TokenManager for DefaultJwtManager {
 
     async fn generate(&self, user_id: &str) -> Result<Self::Token, Self::Error> {
         let access_exp = (Utc::now() + Duration::minutes(15)).timestamp();
-        let refresh_exp = (Utc::now() + Duration::days(7)).timestamp();
+        let refresh_exp = (Utc::now() + Duration::days(1)).timestamp();
 
         let access_claims = JwtClaims {
             sub: user_id.to_string(),

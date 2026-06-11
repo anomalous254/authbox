@@ -1,6 +1,6 @@
 [package]
 name = "authbox-core"
-version = "1.0.1"
+version = "1.1.2"
 edition = "2024"
 description = "Core authentication traits and types for AuthBox"
 license = "Apache-2.0"

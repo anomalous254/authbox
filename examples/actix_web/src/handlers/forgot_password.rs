@@ -1,7 +1,6 @@
 use crate::AppState;
 use crate::models::ForgotPasswordRequest;
 use actix_web::{HttpResponse, Responder, post, web};
-use serde_json::json;
 
 #[post("/forgot-password")]
 pub async fn forgot_password(
@@ -10,10 +9,15 @@ pub async fn forgot_password(
 ) -> impl Responder {
     let auth = state.auth.lock().await;
 
-    auth.request_password_reset(&body.email).await;
+    match auth.request_password_reset(&body.email).await {
+        Ok(_) => HttpResponse::Ok().json(serde_json::json!({
+            "success": true,
+            "message": "Password reset requested"
+        })),
 
-    HttpResponse::Ok().json(json!({
-        "success": true,
-        "message": "Password reset requested"
-    }))
+        Err(e) => HttpResponse::BadRequest().json(serde_json::json!({
+            "success": false,
+            "error": format!("{:?}", e)
+        })),
+    }
 }
