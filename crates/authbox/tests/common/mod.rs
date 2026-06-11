@@ -1,10 +1,12 @@
+#![allow(unused)]
+
 use async_trait::async_trait;
 use authbox::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 // =========================
-// REGISTER DTO (MANY FIELDS)
+// REGISTER DTO
 // =========================
 
 #[derive(Clone, Debug)]
@@ -18,10 +20,6 @@ pub struct RegisterDto {
     pub city: Option<String>,
     pub age: Option<u32>,
 }
-
-// =========================
-// TRAIT (ONLY AUTH CORE FIELDS)
-// =========================
 
 impl RegisterUserInput for RegisterDto {
     fn email(&self) -> &str {
@@ -38,12 +36,10 @@ impl RegisterUserInput for RegisterDto {
 // =========================
 
 #[derive(Clone, Debug)]
-#[allow(unused)]
 pub struct TestUser {
     pub id: String,
     pub email: String,
     pub password_hash: String,
-
     pub is_email_verified: bool,
 
     pub username: Option<String>,
@@ -52,10 +48,6 @@ pub struct TestUser {
     pub city: Option<String>,
     pub age: Option<u32>,
 }
-
-// =========================
-// AUTHUSER
-// =========================
 
 impl AuthUser for TestUser {
     fn id(&self) -> String {
@@ -84,7 +76,7 @@ impl AuthUser for TestUser {
 }
 
 // =========================
-// STORE
+// USER STORE (OK)
 // =========================
 
 #[derive(Clone)]
@@ -107,13 +99,16 @@ impl UserStore for TestStore {
     type RegisterDto = RegisterDto;
 
     async fn find_by_id(&self, user_id: &str) -> Option<TestUser> {
-        let users = self.users.lock().unwrap();
-        users.get(user_id).cloned()
+        self.users.lock().unwrap().get(user_id).cloned()
     }
 
     async fn find_by_email(&self, email: &str) -> Option<TestUser> {
-        let users = self.users.lock().unwrap();
-        users.values().find(|u| u.email == email).cloned()
+        self.users
+            .lock()
+            .unwrap()
+            .values()
+            .find(|u| u.email == email)
+            .cloned()
     }
 
     async fn create_user(
@@ -128,7 +123,6 @@ impl UserStore for TestStore {
             email: input.email,
             password_hash: pass_hash,
             is_email_verified: false,
-
             username: input.username,
             phone: input.phone,
             country: input.country,
@@ -137,100 +131,27 @@ impl UserStore for TestStore {
         };
 
         users.insert(user.id.clone(), user.clone());
-
         Ok(user)
     }
 
     async fn update_user(&self, user: TestUser) -> Result<TestUser, Self::Error> {
-        let mut users = self.users.lock().unwrap();
-        users.insert(user.id.clone(), user.clone());
+        self.users
+            .lock()
+            .unwrap()
+            .insert(user.id.clone(), user.clone());
         Ok(user)
     }
 
     async fn delete_user(&self, user_id: &str) -> Result<(), Self::Error> {
-        let mut users = self.users.lock().unwrap();
-        users.remove(user_id);
+        self.users.lock().unwrap().remove(user_id);
         Ok(())
     }
 
     async fn check_email_verified(&self, user_id: &str) -> Result<bool, Self::Error> {
-        let users = self.users.lock().unwrap();
-
-        match users.get(user_id) {
+        match self.users.lock().unwrap().get(user_id) {
             Some(user) => Ok(user.is_email_verified),
             None => Err("user not found".to_string()),
         }
-    }
-}
-
-// =========================
-// BLACKLIST STORE
-// =========================
-
-#[derive(Clone)]
-pub struct MemoryBlacklistStore {
-    pub tokens: Arc<Mutex<HashSet<String>>>,
-}
-
-impl MemoryBlacklistStore {
-    pub fn new() -> Self {
-        Self {
-            tokens: Arc::new(Mutex::new(HashSet::new())),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct BlacklistError;
-
-#[async_trait]
-impl TokenBlacklistStore for MemoryBlacklistStore {
-    type Error = BlacklistError;
-
-    async fn is_blacklisted(&self, jti: &str) -> Result<bool, Self::Error> {
-        let store = self.tokens.lock().unwrap();
-        Ok(store.contains(jti))
-    }
-
-    async fn blacklist_token(&self, jti: &str, _expires_at: i64) -> Result<bool, Self::Error> {
-        let mut store = self.tokens.lock().unwrap();
-        store.insert(jti.to_string());
-        Ok(true)
-    }
-}
-
-// =========================
-// OTT STORE
-// =========================
-
-#[derive(Clone)]
-pub struct MemoryOttStore {
-    pub store: Arc<Mutex<HashMap<String, String>>>,
-}
-
-impl MemoryOttStore {
-    pub fn new() -> Self {
-        Self {
-            store: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-}
-
-#[async_trait]
-impl OneTimeTokenStore for MemoryOttStore {
-    async fn set(&self, key: &str, value: &str, _: u64) {
-        let mut store = self.store.lock().unwrap();
-        store.insert(key.to_string(), value.to_string());
-    }
-
-    async fn get(&self, key: &str) -> Option<String> {
-        let store = self.store.lock().unwrap();
-        store.get(key).cloned()
-    }
-
-    async fn delete(&self, key: &str) {
-        let mut store = self.store.lock().unwrap();
-        store.remove(key);
     }
 }
 
@@ -246,13 +167,13 @@ impl EmailProvider for MockEmailSender {
     type Error = ();
 
     async fn send_email(&self, to: &str, subject: &str, body: &str) -> Result<(), Self::Error> {
-        println!("\nEMAIL TO: {}\nSUBJECT: {}\nBODY: {}", to, subject, body);
+        println!("EMAIL TO: {}\nSUBJECT: {}\nBODY: {}", to, subject, body);
         Ok(())
     }
 }
 
 // =========================
-// EMAIL TEMPLATES
+// TEMPLATES
 // =========================
 
 #[derive(Clone)]
@@ -278,27 +199,29 @@ impl EmailTemplateConfig<TestUser> for MockTemplates {
 }
 
 // =========================
-// TEST AUTH SERVICE TYPE
+// TEST SERVICE
 // =========================
 
-type TestAuthService = AuthService<
+pub type TestAuthService = AuthService<
     TestStore,
     DefaultHasher,
     DefaultJwtManager,
-    MemoryBlacklistStore,
+    RedisBlacklistStore,
     MockEmailSender,
     MockTemplates,
-    MemoryOttStore,
+    RedisOttStore,
 >;
 
 pub fn build_test_auth() -> TestAuthService {
+    let client = redis::Client::open("redis://127.0.0.1/").expect("failed to connect to redis");
+
     AuthService::builder()
         .store(TestStore::new())
         .hasher(DefaultHasher)
         .tokens(DefaultJwtManager::new("secret"))
-        .blacklist(MemoryBlacklistStore::new())
+        .blacklist(RedisBlacklistStore::new(client.clone()))
         .email_sender(MockEmailSender)
         .email_templates(MockTemplates)
-        .ott_store(MemoryOttStore::new())
+        .ott_store(RedisOttStore::new(client))
         .build()
 }

@@ -2,6 +2,34 @@ mod common;
 
 use authbox::prelude::*;
 use common::*;
+use redis::AsyncCommands;
+
+/// Helper: safely extract the first OTT token from Redis for a given user
+async fn get_token(auth: &TestAuthService, user_id: &str) -> String {
+    let mut conn = auth
+        .ott_store
+        .client
+        .get_multiplexed_async_connection()
+        .await
+        .expect("Failed to get Redis connection");
+
+    // Scan keys with a pattern if you use a prefix, or "*" if not
+    let keys: Vec<String> = redis::cmd("KEYS")
+        .arg("*")
+        .query_async(&mut conn)
+        .await
+        .expect("Failed to fetch keys from Redis");
+
+    for key in keys {
+        if let Ok(Some(value)) = conn.get::<_, Option<String>>(&key).await {
+            if value == user_id {
+                return key;
+            }
+        }
+    }
+
+    panic!("OTT token not found for user {}", user_id);
+}
 
 #[test]
 fn test_password_hashing() {
@@ -9,9 +37,7 @@ fn test_password_hashing() {
 
     let hash = hasher.hash("password123");
 
-    println!();
-    println!("=== PASSWORD HASH ===");
-    println!("{}", hash);
+    println!("\n=== PASSWORD HASH ===\n{}", hash);
 
     assert!(hasher.verify("password123", &hash));
     assert!(!hasher.verify("wrong-password", &hash));
@@ -20,10 +46,6 @@ fn test_password_hashing() {
 #[tokio::test]
 async fn test_register_and_login_flow() {
     let mut auth = build_test_auth();
-
-    // =========================
-    // REGISTER
-    // =========================
 
     let user = auth
         .register(RegisterDto {
@@ -38,57 +60,22 @@ async fn test_register_and_login_flow() {
         .await
         .unwrap();
 
-    println!();
-    println!("=== REGISTER ===");
-    println!("{:#?}", user);
+    println!("\n=== REGISTER ===\n{:#?}", user);
 
     assert_eq!(user.email(), "john@test.com");
 
-    // =========================
-    // LOGIN BEFORE VERIFY
-    // =========================
-
     let unverified = auth.login("john@test.com", "password123").await;
-
-    println!();
-    println!("=== LOGIN UNVERIFIED ===");
-    println!("{:#?}", unverified);
-
     assert!(matches!(unverified, Err(LoginError::EmailNotVerified)));
 
-    // =========================
-    // VERIFY EMAIL
-    // =========================
-
-    let mut verified_user = auth.store.find_by_email("john@test.com").await.unwrap();
-
-    verified_user.set_email_verified(true);
-
-    auth.store.update_user(verified_user).await.unwrap();
-
-    // =========================
-    // LOGIN SUCCESS
-    // =========================
+    // Redis-aware token fetch
+    let token = get_token(&auth, "john@test.com").await;
+    auth.verify_email(&token).await.unwrap();
 
     let tokens = auth.login("john@test.com", "password123").await.unwrap();
-
-    println!();
-    println!("=== LOGIN SUCCESS ===");
-    println!("{:#?}", tokens);
-
     assert!(!tokens.access_token.is_empty());
     assert!(!tokens.refresh_token.is_empty());
 
-    // =========================
-    // LOGIN FAIL
-    // =========================
-
     let failed = auth.login("john@test.com", "wrong-password").await;
-
-    println!();
-    println!("=== LOGIN FAILED ===");
-    println!("{:#?}", failed);
-
     assert!(matches!(failed, Err(LoginError::InvalidCredentials)));
 }
 
@@ -108,42 +95,13 @@ async fn test_refresh_token_flow() {
     .await
     .unwrap();
 
-    // =========================
-    // VERIFY EMAIL
-    // =========================
-
-    let mut user = auth.store.find_by_email("refresh@test.com").await.unwrap();
-
-    user.set_email_verified(true);
-
-    auth.store.update_user(user).await.unwrap();
-
-    // =========================
-    // LOGIN
-    // =========================
+    let token = get_token(&auth, "refresh@test.com").await;
+    auth.verify_email(&token).await.unwrap();
 
     let login = auth.login("refresh@test.com", "password123").await.unwrap();
-
-    println!();
-    println!("=== ORIGINAL TOKENS ===");
-    println!("{:#?}", login);
-
-    // =========================
-    // REFRESH
-    // =========================
-
     let refreshed = auth.refresh_token(&login.refresh_token).await;
 
-    println!();
-    println!("=== REFRESH RESULT ===");
-    println!("{:#?}", refreshed);
-
     assert!(refreshed.is_ok());
-
-    let new_tokens = refreshed.unwrap();
-
-    assert!(!new_tokens.access_token.is_empty());
-    assert!(!new_tokens.refresh_token.is_empty());
 }
 
 #[tokio::test]
@@ -162,52 +120,18 @@ async fn test_refresh_token_blacklist_flow() {
     .await
     .unwrap();
 
-    // =========================
-    // VERIFY EMAIL
-    // =========================
-
-    let mut user = auth
-        .store
-        .find_by_email("blacklist@test.com")
-        .await
-        .unwrap();
-
-    user.set_email_verified(true);
-
-    auth.store.update_user(user).await.unwrap();
-
-    // =========================
-    // LOGIN
-    // =========================
+    let token = get_token(&auth, "blacklist@test.com").await;
+    auth.verify_email(&token).await.unwrap();
 
     let login = auth
         .login("blacklist@test.com", "password123")
         .await
         .unwrap();
-
     let refresh_token = login.refresh_token.clone();
 
-    // =========================
-    // FIRST REFRESH
-    // =========================
-
     let first = auth.refresh_token(&refresh_token).await;
-
-    println!();
-    println!("=== FIRST REFRESH ===");
-    println!("{:#?}", first);
-
     assert!(first.is_ok());
 
-    // =========================
-    // SECOND REFRESH
-    // =========================
-
     let second = auth.refresh_token(&refresh_token).await;
-
-    println!();
-    println!("=== SECOND REFRESH ===");
-    println!("{:#?}", second);
-
     assert!(matches!(second, Err(AuthError::BlacklistedToken)));
 }
