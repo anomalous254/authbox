@@ -13,10 +13,10 @@ categories = ["authentication", "web-programming"]
 authors = ["anomalous254"]
 
 [dependencies]
-authbox-core = "1.1.2"
-authbox-jwt = "1.1.2"
-authbox-argon2 = "1.1.2"
-authbox-redis = "1.1.2"
+authbox-core = "1.0.1"
+authbox-jwt = "1.0.1"
+authbox-argon2 = "1.0.1"
+authbox-redis = {path = "../authbox-redis"}
 async-trait = "0.1.89"
 tokio = { version = "1", features = ["full"] }
 redis = { version = "1.2.2", features = ["tokio-comp"] }
