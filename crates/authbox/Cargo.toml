@@ -35,7 +35,7 @@ authbox-jwt = "1.1.2"
 authbox-argon2 = "1.1.2"
 authbox-redis = "1.1.2"
 authbox-email = {
-    version = "1.2.3",
+    version = "1.1.4",
     optional = true
 }
 async-trait = "0.1.89"
