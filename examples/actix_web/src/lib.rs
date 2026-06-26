@@ -5,6 +5,8 @@ mod common;
 mod handlers;
 mod models;
 mod routes;
+mod email_providers;
+
 use common::*;
 
 use routes::config;

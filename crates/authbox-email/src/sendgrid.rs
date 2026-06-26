@@ -1,10 +1,7 @@
 use async_trait::async_trait;
 use authbox_core::traits::EmailProvider;
-
 use reqwest::Client;
 use serde_json::json;
-
-
 
 #[derive(Clone)]
 pub struct SendGridEmailProvider {
@@ -14,15 +11,12 @@ pub struct SendGridEmailProvider {
     client: Client,
 }
 
-
-
 impl SendGridEmailProvider {
-    pub fn new<T: Into<String>>(
-        api_key: T,
-        from_email: T,
-        from_name: T,
+    pub fn new(
+        api_key: impl Into<String>,
+        from_email: impl Into<String>,
+        from_name: impl Into<String>,
     ) -> Self {
-
         Self {
             api_key: api_key.into(),
             from_email: from_email.into(),
@@ -32,11 +26,8 @@ impl SendGridEmailProvider {
     }
 }
 
-
-
 #[async_trait]
 impl EmailProvider for SendGridEmailProvider {
-
     type Error = reqwest::Error;
 
     async fn send_email(
@@ -45,43 +36,28 @@ impl EmailProvider for SendGridEmailProvider {
         subject: &str,
         body: &str,
     ) -> Result<(), Self::Error> {
-
-
         self.client
-            .post(
-                "https://api.sendgrid.com/v3/mail/send"
-            )
+            .post("https://api.sendgrid.com/v3/mail/send")
             .bearer_auth(&self.api_key)
             .json(&json!({
-
-                "personalizations": [
-                    {
-                        "to": [
-                            {
-                                "email": to
-                            }
-                        ]
-                    }
-                ],
-
+                "personalizations": [{
+                    "to": [{
+                        "email": to
+                    }]
+                }],
                 "from": {
                     "email": self.from_email,
                     "name": self.from_name
                 },
-
                 "subject": subject,
-
-                "content": [
-                    {
-                        "type": "text/html",
-                        "value": body
-                    }
-                ]
+                "content": [{
+                    "type": "text/html",
+                    "value": body
+                }]
             }))
             .send()
             .await?
             .error_for_status()?;
-
 
         Ok(())
     }

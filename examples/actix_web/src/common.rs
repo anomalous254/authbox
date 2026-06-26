@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
+use crate::email_providers::sendgrid_email_provider;
+
+use super::email_providers::smtp_email_provider;
 
 // =========================
 // REGISTER DTO (MANY FIELDS)
@@ -169,48 +172,59 @@ impl UserStore for TestStore {
 }
 
 // =========================
-// EMAIL PROVIDER
-// =========================
-
-#[derive(Clone)]
-pub struct MockEmailSender;
-
-#[async_trait]
-impl EmailProvider for MockEmailSender {
-    type Error = ();
-
-    async fn send_email(&self, to: &str, subject: &str, body: &str) -> Result<(), Self::Error> {
-        println!("\nEMAIL TO: {}\nSUBJECT: {}\nBODY: {}", to, subject, body);
-        Ok(())
-    }
-}
-
-// =========================
 // EMAIL TEMPLATES
 // =========================
-
 #[derive(Clone)]
 pub struct MockTemplates;
 
-#[async_trait]
 impl EmailTemplateConfig<TestUser> for MockTemplates {
+
     fn verify_email_subject(&self, _: &TestUser) -> String {
-        "Verify Email".to_string()
+        "Verify your email".to_string()
     }
 
-    fn verify_email_body(&self, _: &TestUser, token: &str) -> String {
-        format!("verify email token: {}", token)
+    fn verify_email_body(
+        &self,
+        user: &TestUser,
+        token: &str,
+    ) -> String {
+        format!(
+            "Hello {},
+
+Please verify your email by clicking the link below:
+
+http://localhost:8080/verify-email/{}
+
+If you did not create this account, you can ignore this email.",
+            user.email,
+            token
+        )
     }
 
     fn reset_password_subject(&self, _: &TestUser) -> String {
-        "Reset Password".to_string()
+        "Reset your password".to_string()
     }
 
-    fn reset_password_body(&self, _: &TestUser, token: &str) -> String {
-        format!("reset password token: {}", token)
+    fn reset_password_body(
+        &self,
+        user: &TestUser,
+        token: &str,
+    ) -> String {
+        format!(
+            "Hello {},
+
+You requested a password reset.
+
+Reset your password using the link below:
+
+http://localhost:8080/reset-password/{}
+
+If you did not request this, ignore this email.",
+            user.email,
+            token
+        )
     }
 }
-
 // =========================
 // TEST AUTH SERVICE TYPE
 // =========================
@@ -220,20 +234,20 @@ pub type TestAuthService = AuthService<
     DefaultHasher,
     DefaultJwtManager,
     RedisBlacklistStore,
-    MockEmailSender,
+    SendGridEmailProvider,
     MockTemplates,
     RedisOttStore,
 >;
 
 pub fn build_test_auth() -> TestAuthService {
-    let client = redis::Client::open("redis://127.0.0.1/").expect("failed to connect to redis");
+    let client = redis::Client::open("redis://127.0.0.1/").expect("failed to connect to redis"); 
 
     AuthService::builder()
         .store(TestStore::new())
         .hasher(DefaultHasher)
         .tokens(DefaultJwtManager::new("secret"))
         .blacklist(RedisBlacklistStore::new(client.clone()))
-        .email_sender(MockEmailSender)
+        .email_sender(sendgrid_email_provider())
         .email_templates(MockTemplates)
         .ott_store(RedisOttStore::new(client))
         .build()

@@ -55,6 +55,7 @@ http://127.0.0.1:8080
 | POST | `/forgot-password` | Request password reset |
 | POST | `/reset-password` | Reset password |
 | GET | `/api/me` | Get current authenticated user |
+| POST | `/logout` | LogOut current authenticated user |
 
 ---
 

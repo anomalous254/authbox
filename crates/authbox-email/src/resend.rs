@@ -1,28 +1,30 @@
 use async_trait::async_trait;
 use authbox_core::traits::EmailProvider;
-use reqwest::Client;
-use serde_json::json;
+use resend_rs::{
+    Resend,
+    types::CreateEmailBaseOptions,
+};
 
 
 #[derive(Clone)]
 pub struct ResendEmailProvider {
-    api_key: String,
+    client: Resend,
     from: String,
-    client: Client,
 }
 
 
 impl ResendEmailProvider {
 
-    pub fn new<T: Into<String>>(
-        api_key: T,
-        from: T,
+    pub fn new(
+        api_key: impl Into<String>,
+        from: impl Into<String>,
     ) -> Self {
 
         Self {
-            api_key: api_key.into(),
+            client: Resend::new(
+                &api_key.into()
+            ),
             from: from.into(),
-            client: Client::new(),
         }
     }
 }
@@ -32,7 +34,7 @@ impl ResendEmailProvider {
 #[async_trait]
 impl EmailProvider for ResendEmailProvider {
 
-    type Error = reqwest::Error;
+    type Error = resend_rs::Error;
 
 
     async fn send_email(
@@ -43,18 +45,19 @@ impl EmailProvider for ResendEmailProvider {
     ) -> Result<(), Self::Error> {
 
 
+        let email =
+            CreateEmailBaseOptions::new(
+                &self.from,
+                [to],
+                subject,
+            )
+            .with_html(body);
+
+
         self.client
-            .post("https://api.resend.com/emails")
-            .bearer_auth(&self.api_key)
-            .json(&json!({
-                "from": self.from,
-                "to": [to],
-                "subject": subject,
-                "html": body
-            }))
-            .send()
-            .await?
-            .error_for_status()?;
+            .emails
+            .send(email)
+            .await?;
 
 
         Ok(())
