@@ -20,6 +20,8 @@ It is designed for applications that need customizable authentication logic with
 1. authbox-core (traits + engine)
 2. authbox-jwt (JWT provider)
 3. authbox-argon2 (password hashing)
+4. authbox-redis (ott & jwt blacklisting )
+5. authbox-email (email service providers)
 
 
 ## Features
