@@ -13,7 +13,7 @@ categories = ["authentication", "web-programming"]
 authors = ["anomalous254"]
 
 
-features]
+[features]
 default = []
 email = ["dep:authbox-email"]
 email-resend = [
